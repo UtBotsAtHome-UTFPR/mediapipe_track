@@ -1,0 +1,7 @@
+<launch>
+
+    <node pkg="apollo_vision" type="locker_human.py" name="locker_human" output="screen"/>
+
+    <node pkg="tf" type="static_transform_publisher" name="target_broadcaster" args="0 0 0 0 0 0 camera_link target 15" />
+
+</launch>

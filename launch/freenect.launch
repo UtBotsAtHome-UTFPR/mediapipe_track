@@ -1,0 +1,17 @@
+<launch>
+
+    <include file="$(find freenect_launch)/launch/freenect.launch">
+        <arg name="depth_registration" value="true" />
+    </include>
+
+    <node name="image_rgb" pkg="image_view" type="image_view" respawn="false" output="screen">
+        <remap from="image" to="/camera/rgb/image_raw" />
+        <param name="autosize" value="true" />
+    </node>
+
+    <node name="image_depth" pkg="image_view" type="image_view" respawn="false" output="screen">
+        <remap from="image" to="/camera/depth_registered/image_raw" />
+        <param name="autosize" value="true" />
+    </node>
+
+</launch>

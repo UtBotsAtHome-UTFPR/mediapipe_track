@@ -1,0 +1,19 @@
+<!-- PARA USAR O KINECT -->
+
+<launch>
+    
+    <node 
+        pkg="tf" 
+        type="static_transform_publisher" 
+        name="camera_broadcaster" 
+        args="0 0 0.2 -1.57 0 -1.57 base_footprint camera_link 15"
+    />
+
+    <node 
+        type="rviz"
+        name="rviz" 
+        pkg="rviz" 
+        args="-d $(find apollo_vision)/rviz.rviz" 
+    />
+    
+</launch>
