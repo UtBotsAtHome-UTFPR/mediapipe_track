@@ -19,7 +19,7 @@ catkin_make
 First, run freenect:
 
 ```
-roslaunch freenect_launch freenect.launch
+roslaunch mediapipe_track freenect.launch
 ```
 
 Then, to run the pose tracking and 3D position algorithm, run 
