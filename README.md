@@ -27,3 +27,9 @@ Then, to run the pose tracking and 3D position algorithm, run
 ```
 roslaunch mediapipe_track locker_human.launch
 ```
+
+To view the 3D map with the published 3D point referred as the person detected position, run Rviz with
+
+```
+roslaunch mediapipe_track rviz.launch
+```
