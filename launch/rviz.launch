@@ -13,7 +13,7 @@
         type="rviz"
         name="rviz" 
         pkg="rviz" 
-        args="-d $(find apollo_vision)/rviz.rviz" 
+        args="-d $(find mediapipe_track)/rviz.rviz" 
     />
     
 </launch>
