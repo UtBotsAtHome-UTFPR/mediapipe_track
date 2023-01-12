@@ -1,18 +1,26 @@
 #!/usr/bin/env python
+
+# Mediapipe imports
 import cv2
+from mediapipe import mp
+
+# Image processing
 from cv_bridge import CvBridge
-import mediapipe as mp
-import numpy as np
+
+# ROS
 import rospy
+## Message definitions
 from std_msgs.msg import String
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
 from sensor_msgs.msg import Image
-from math import pow, sqrt, tan, radians
-
-
+## Transformation tree
 from tf.msg import tfMessage
 from geometry_msgs.msg import TransformStamped
 from tf.transformations import quaternion_from_euler
+
+# Math 
+import numpy as np
+from math import pow, sqrt, tan, radians
 
 class LockPose():
     def __init__(self, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
