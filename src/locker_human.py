@@ -79,10 +79,12 @@ class LockPose():
 
         # Calls main loop
         self.pose = self.mp_pose.Pose(
+            # Pose Configurations
             min_detection_confidence=0.75,
             min_tracking_confidence=0.9)
         self.mainLoop()
 
+# Callbacks
     def callback_rgbImg(self, msg):
         self.msg_rgbImg = msg
         self.newRgbImg = True
@@ -93,11 +95,12 @@ class LockPose():
         self.newDepthImg = True
         # print("- Depth: new msg")
 
+# Basic MediaPipe Pose methods
     def ProcessImg(self, msg_img):
         # Conversion to cv image
         cvImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, "bgr8")
 
-        # Not writeable passes by reference (more performance)
+        # Not writeable passes by reference (better performance)
         cvImg.flags.writeable = False
 
         # Converts BGR to RGB
@@ -122,6 +125,8 @@ class LockPose():
             self.mp_pose.POSE_CONNECTIONS,
             landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style())
 
+
+# Torso data processing
     ''' Gets points for torso (shoulders and hips) '''
     def GetTorsoPoints(self, landmark):
         rightShoulder = Point(
@@ -142,17 +147,6 @@ class LockPose():
             landmark[self.mp_pose.PoseLandmark.LEFT_HIP].z)
         return [rightShoulder, leftShoulder, rightHip, leftHip]
 
-    def GetPointsMean(self, points):
-        sum_x = 0
-        sum_y = 0
-        sum_z = 0
-        counter = 0
-        for point in points:
-            sum_x = sum_x + point.x
-            sum_y = sum_y + point.y
-            sum_z = sum_z + point.z
-            counter = counter + 1
-        return Point(sum_x/counter, sum_y/counter, sum_z/counter)
 
     def CropTorsoImg(self, img, imgEncoding, torsoPoints, torsoCenter):
         if imgEncoding == "32FC1":
@@ -180,6 +174,19 @@ class LockPose():
 
         depthMean = np.mean(rowMeans)
         return depthMean
+
+# Points calculations
+    def GetPointsMean(self, points):
+        sum_x = 0
+        sum_y = 0
+        sum_z = 0
+        counter = 0
+        for point in points:
+            sum_x = sum_x + point.x
+            sum_y = sum_y + point.y
+            sum_z = sum_z + point.z
+            counter = counter + 1
+        return Point(sum_x/counter, sum_y/counter, sum_z/counter)
 
     ''' By using rule of three and considering the FOV of the camera:
             - Calculates the 3D point of a depth pixel '''
@@ -223,9 +230,11 @@ class LockPose():
 
         return Point(x, y, z)
 
+    ''' Transforms the mpipe coordinate format to tf tree coordinate format'''
     def XyzToZxy(self, point):
         return Point(point.z, point.x, point.y)   
 
+# Transformation tree methods
     def SetupTfMsg(self, x, y, z):
         self.msg_tfStamped.header.frame_id = "camera_link"
         self.msg_tfStamped.header.stamp = rospy.Time.now()
@@ -241,6 +250,7 @@ class LockPose():
         msg_tf = tfMessage([self.msg_tfStamped])
         self.pub_tf.publish(msg_tf)
 
+# Nodes Publish
     def PublishEverything(self):
         self.pub_targetCroppedRgbImg.publish(self.msg_targetCroppedRgbImg)
         self.pub_targetCroppedDepthImg.publish(self.msg_targetCroppedDepthImg)
@@ -249,6 +259,7 @@ class LockPose():
         self.pub_targetSkeletonImg.publish(self.msg_targetSkeletonImg)
         # self.SetupTfMsg(self.msg_targetPoint.point.x, self.msg_targetPoint.point.y, self.msg_targetPoint.point.z)
 
+# Main
     def mainLoop(self):
         while rospy.is_shutdown() == False:
             self.loopRate.sleep()
