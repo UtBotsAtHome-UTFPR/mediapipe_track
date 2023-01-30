@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
+import os
+
 # Mediapipe imports
 import cv2
-from mediapipe import mp
+import mediapipe as mp
 
 # Image processing
 from cv_bridge import CvBridge
@@ -76,6 +78,15 @@ class LockPose():
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.mp_pose = mp.solutions.pose
+        self.MIN_VISIBILITY = 0.5
+
+        # Statistics
+        ## 0 - Torso Height
+        self.iteration = 0
+        self.meanList = [0,0]
+        self.minList = [0,0]
+        self.maxList = [0,0]
+        self.varianceList = [0,0]
 
         # Calls main loop
         self.pose = self.mp_pose.Pose(
@@ -126,13 +137,53 @@ class LockPose():
             landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style())
 
 
-# Torso data processing
+# Body data processing
+## Limbs distances
+    def LimbsDistances(self, landmark):
+
+        rHip = landmark[self.mp_pose.PoseLandmark.RIGHT_HIP]
+        lHip = landmark[self.mp_pose.PoseLandmark.LEFT_HIP] 
+        rShoulder = landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER]
+        lShoulder = landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER]
+
+        os.system("clear")
+        # print(
+        #     "Valued points:\n- Right Hip: {}\n- Left Hip: {}\n- Right Shoulder: {}\n- Left Shoulder: {}".format(
+        #         rHip, 
+        #         lHip, 
+        #         rShoulder,
+        #         lShoulder))
+        
+        # print("Shoulder:")
+        # shoulderWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER], landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER])
+        # print("SW: {:.2f}".format(shoulderWidth))
+        # print("\nHip:")
+        # hipWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_HIP], landmark[self.mp_pose.PoseLandmark.LEFT_HIP])
+        # print("HW: {:.2f}".format(hipWidth))    
+        
+        print("\nTorso:")
+        if(self.ChkVisib(rHip) and self.ChkVisib(lHip) and self.ChkVisib(lShoulder) and self.ChkVisib(lShoulder)):
+            torsoHeightR = self.EucDist(rHip, rShoulder)
+            # print("RTH: {:.2f}\n".format(torsoHeightR))   
+            torsoHeightL = self.EucDist(lHip, lShoulder)
+            # print("LTH: {:.2f}\n".format(torsoHeightL))  
+            meanTH = (torsoHeightL+torsoHeightR)/2
+            print("Mean TH: {:.2f}\n".format(meanTH))
+            self.Statistics(landmark, 0, meanTH)
+        else:
+            print("WARN: Points not visible")
+
+## Torso
     ''' Gets points for torso (shoulders and hips) '''
     def GetTorsoPoints(self, landmark):
         rightShoulder = Point(
             landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].x, 
             landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].y, 
             landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].z)
+        print(" - RSHOULDER xyz: ({}, {}, {})".format(
+            landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].x, 
+            landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].y, 
+            landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].z))
         leftShoulder = Point(
             landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER].x, 
             landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER].y, 
@@ -234,6 +285,44 @@ class LockPose():
     def XyzToZxy(self, point):
         return Point(point.z, point.x, point.y)   
 
+    def EucDist(self, pointA, pointB):
+        print("A: ({:.2f}, {:.2f}, {:.2f})\nB: ({:.2f}, {:.2f}, {:.2f})".format(pointA.x,pointA.y,pointA.z,pointB.x,pointB.y,pointB.z))
+        return sqrt(pow(pointA.x-pointB.x, 2)+pow(pointA.y-pointB.y, 2)+pow(pointA.z-pointB.z, 2))
+
+    def Statistics(self, landmark, feature, value):
+        if self.iteration < 1:
+            firstValue = (self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_HIP], landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER])+self.EucDist(landmark[self.mp_pose.PoseLandmark.LEFT_HIP], landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER]))/2
+            self.meanList[feature] = firstValue
+            self.maxList[feature] = firstValue
+            self.minList[feature] = firstValue
+            self.varianceList[feature] = firstValue
+            self.iteration=1
+        else:
+            # Moving Average of Streaming Data
+            self.meanList[feature] = self.meanList[feature]+(value-self.meanList[feature])/self.iteration
+            ##relevance = 1/self.iteration
+            ##self.meanList[feature] = (self.meanList[feature]+value*relevance)/(1+relevance)
+
+            # Maximum Value
+            if value > self.maxList[feature]:
+                self.maxList[feature] = value
+
+            # Maximum Value
+            if value < self.minList[feature]:
+                self.minList[feature] = value
+            
+            # Variance
+            self.varianceList[feature] = self.maxList[feature] - self.minList[feature]
+
+            # Iteration
+            self.iteration+=1
+
+            print("Iteration: {}\nGMean: {}\nGMin: {}\nGMax: {}\nGVar: {}".format(self.iteration, 
+            self.meanList[feature],self.minList[feature],self.maxList[feature],self.varianceList[feature]))
+            
+    def ChkVisib(self, lmark):
+        return (lmark.visibility > self.MIN_VISIBILITY)
+
 # Transformation tree methods
     def SetupTfMsg(self, x, y, z):
         self.msg_tfStamped.header.frame_id = "camera_link"
@@ -264,12 +353,24 @@ class LockPose():
         while rospy.is_shutdown() == False:
             self.loopRate.sleep()
             self.PublishEverything()
-            print("\nTARGET")
-            print(" - status: {}".format(self.msg_targetStatus))
-            print(" - xyz: ({}, {}, {})".format(
-                self.msg_targetPoint.point.x, 
-                self.msg_targetPoint.point.y, 
-                self.msg_targetPoint.point.z))
+            # print("\nTARGET")
+            # print(" - status: {}".format(self.msg_targetStatus))
+            # print(" - xyz: ({}, {}, {})".format(
+            #     self.msg_targetPoint.point.x, 
+            #     self.msg_targetPoint.point.y, 
+            #     self.msg_targetPoint.point.z))
+
+            # Basic RGB only TEST
+            if self.newRgbImg == True:
+                cv_rgbImg, poseResults = self.ProcessImg(self.msg_rgbImg)
+                self.DrawLandmarks(cv_rgbImg, poseResults)
+                self.msg_targetSkeletonImg = self.cvBridge.cv2_to_imgmsg(cv_rgbImg)
+                # cv2.imshow('MediaPipe Pose', cv_rgbImg)
+                if cv2.waitKey(5) & 0xFF == 27:
+                    break
+
+                if poseResults.pose_landmarks:
+                    self.LimbsDistances(poseResults.pose_landmarks.landmark)
                 
             # Else -> new RGB and new depth are true...
             if self.newRgbImg == True and self.newDepthImg == True:
