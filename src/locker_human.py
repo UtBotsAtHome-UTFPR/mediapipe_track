@@ -8,6 +8,8 @@ import mediapipe as mp
 
 # Image processing
 from cv_bridge import CvBridge
+from sklearn.cluster import KMeans
+from collections import Counter
 
 # ROS
 import rospy
@@ -81,12 +83,18 @@ class LockPose():
         self.MIN_VISIBILITY = 0.5
 
         # Statistics
-        ## 0 - Torso Height
+        ## 0 - Shoulder Width
+        ## 1 - Hip Width
+        ## 2 - Torso Height
+        ## 3 - Right Leg
+        ## 4 - Left Leg
+        ## 5 - Torso Color
+        
         self.iteration = 0
-        self.meanList = [0,0]
-        self.minList = [0,0]
-        self.maxList = [0,0]
-        self.varianceList = [0,0]
+        self.meanList = [0,0,0,0,0,0]
+        self.minList = [0,0,0,0,0,0]
+        self.maxList = [0,0,0,0,0,0]
+        self.varianceList = [0,0,0,0,0,0]
 
         # Calls main loop
         self.pose = self.mp_pose.Pose(
@@ -151,47 +159,49 @@ class LockPose():
         lAnkle = landmark[self.mp_pose.PoseLandmark.LEFT_ANKLE]
 
         os.system("clear")
-        print(
-            "Valued points:\n- Right Hip: {}\n- Left Hip: {}\n- Right Shoulder: {}\n- Left Shoulder: {}".format(
-                rHip, 
-                lHip, 
-                rShoulder,
-                lShoulder))
+        # print(
+        #     "Valued points:\n- Right Hip: {}\n- Left Hip: {}\n- Right Shoulder: {}\n- Left Shoulder: {}".format(
+        #         rHip, 
+        #         lHip, 
+        #         rShoulder,
+        #         lShoulder))
 
-        print("Shoulder:")
+        # print("Shoulder:")
         shoulderWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER], landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER])
         print("SW: {:.2f}".format(shoulderWidth))
-        print("\nHip:")
+        # print("\nHip:")
         hipWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_HIP], landmark[self.mp_pose.PoseLandmark.LEFT_HIP])
         print("HW: {:.2f}".format(hipWidth))    
         
-        print("\nTorso:")
+        # print("\nTorso:")
         if(self.ChkVisib(rHip) and self.ChkVisib(lHip) and self.ChkVisib(lShoulder) and self.ChkVisib(lShoulder)):
             torsoHeightR = self.EucDist(rHip, rShoulder)
             # print("RTH: {:.2f}\n".format(torsoHeightR))   
             torsoHeightL = self.EucDist(lHip, lShoulder)
             # print("LTH: {:.2f}\n".format(torsoHeightL))  
             meanTorsoHeight = (torsoHeightL+torsoHeightR)/2
-            print("Mean TH: {:.2f}\n".format(meanTorsoHeight))
-            self.Statistics(landmark, 0, meanTorsoHeight)
-        else:
-            print("WARN: Points not visible")
+            print("Mean TH: {:.2f}".format(meanTorsoHeight))
+            # self.Statistics(landmark, 0, meanTorsoHeight)
+        # else:
+        #     print("WARN: Points not visible")
 
-        print("\nRight Leg:")
+        # print("\nRight Leg:")
         if(self.ChkVisib(rHip) and self.ChkVisib(rKnee) and self.ChkVisib(rAnkle)):
             rLegLenght = self.EucDist(rHip, rKnee)+self.EucDist(rKnee,rAnkle)
-            print("Right Leg Lenght: {:.2f}\n".format(rLegLenght))
-            self.Statistics(landmark, 0, rLegLenght)
-        else:
-            print("WARN: Points not visible")
+            print("Right Leg Lenght: {:.2f}".format(rLegLenght))
+            # self.Statistics(landmark, 0, rLegLenght)
+        # else:
+        #     print("WARN: Points not visible")
 
-        print("\nLeft Leg:")
+        # print("\nLeft Leg:")
         if(self.ChkVisib(lHip) and self.ChkVisib(lKnee) and self.ChkVisib(lAnkle)):
             lLegLenght = self.EucDist(lHip, lKnee)+self.EucDist(lKnee,lAnkle)
-            print("Right Leg Lenght: {:.2f}\n".format(lLegLenght))
-            self.Statistics(landmark, 0, lLegLenght)
-        else:
-            print("WARN: Points not visible")
+            print("Left Leg Lenght: {:.2f}".format(lLegLenght))
+            # self.Statistics(landmark, 0, lLegLenght)
+        # else:
+        #     print("WARN: Points not visible")
+
+        
 
 ## Torso
     ''' Gets points for torso (shoulders and hips) '''
@@ -306,7 +316,7 @@ class LockPose():
         return Point(point.z, point.x, point.y)   
 
     def EucDist(self, pointA, pointB):
-        print("A: ({:.2f}, {:.2f}, {:.2f})\nB: ({:.2f}, {:.2f}, {:.2f})".format(pointA.x,pointA.y,pointA.z,pointB.x,pointB.y,pointB.z))
+        # print("A: ({:.2f}, {:.2f}, {:.2f})\nB: ({:.2f}, {:.2f}, {:.2f})".format(pointA.x,pointA.y,pointA.z,pointB.x,pointB.y,pointB.z))
         return sqrt(pow(pointA.x-pointB.x, 2)+pow(pointA.y-pointB.y, 2)+pow(pointA.z-pointB.z, 2))
 
     def Statistics(self, landmark, feature, value):
@@ -375,6 +385,32 @@ class LockPose():
         msg_tf = tfMessage([self.msg_tfStamped])
         self.pub_tf.publish(msg_tf)
 
+# Image processing
+    def get_dominant_color(self, image):
+
+        k=4
+        image_processing_size = None
+
+        #resize image if new dims provided
+        if image_processing_size is not None:
+            image = cv2.resize(image, image_processing_size, 
+                                interpolation = cv2.INTER_AREA)
+        
+        #reshape the image to be a list of pixels
+        image = image.reshape((image.shape[0] * image.shape[1], 3))
+
+        #cluster and assign labels to the pixels 
+        clt = KMeans(n_clusters = k)
+        labels = clt.fit_predict(image)
+
+        #count labels to find most popular
+        label_counts = Counter(labels)
+
+        #subset out most popular centroid
+        dominant_color = clt.cluster_centers_[label_counts.most_common(1)[0][0]]
+
+        return list(dominant_color)
+        
 # Nodes Publish
     def PublishEverything(self):
         self.pub_targetCroppedRgbImg.publish(self.msg_targetCroppedRgbImg)
@@ -405,8 +441,8 @@ class LockPose():
                 if cv2.waitKey(5) & 0xFF == 27:
                     break
     
-                if poseResults.pose_landmarks:
-                    self.LimbsDistances(poseResults.pose_landmarks.landmark)
+                # if poseResults.pose_landmarks:
+                #     self.LimbsDistances(poseResults.pose_world_landmarks.landmark)
 
                 if poseResults.pose_landmarks:
                     torsoPoints = self.GetTorsoPoints(poseResults.pose_landmarks.landmark)
@@ -420,47 +456,53 @@ class LockPose():
                         print("------------- Error in RGB crop -------------")
                         continue
 
-                    self.MeanPixelColor(croppedRgbImg)
+                    # self.MeanPixelColor(croppedRgbImg)
+
+                    height=512
+                    width=512
+                    blank_image = np.zeros((height,width,3), np.uint8)
+                    blank_image[:]=self.get_dominant_color(croppedRgbImg)
+                    cv2.imshow('3 Channel Window', blank_image)
                 
             # Else -> new RGB and new depth are true...
-            if self.newRgbImg == True and self.newDepthImg == True:
-                self.newRgbImg = False
-                self.newDepthImg = False
+            # if self.newRgbImg == True and self.newDepthImg == True:
+            #     self.newRgbImg = False
+            #     self.newDepthImg = False
 
-                cv_rgbImg, poseResults = self.ProcessImg(self.msg_rgbImg)
-                self.DrawLandmarks(cv_rgbImg, poseResults)
-                self.msg_targetSkeletonImg = self.cvBridge.cv2_to_imgmsg(cv_rgbImg)
-                # cv2.imshow('MediaPipe Pose', cv_rgbImg)
-                if cv2.waitKey(5) & 0xFF == 27:
-                    break
+            #     cv_rgbImg, poseResults = self.ProcessImg(self.msg_rgbImg)
+            #     self.DrawLandmarks(cv_rgbImg, poseResults)
+            #     self.msg_targetSkeletonImg = self.cvBridge.cv2_to_imgmsg(cv_rgbImg)
+            #     # cv2.imshow('MediaPipe Pose', cv_rgbImg)
+            #     if cv2.waitKey(5) & 0xFF == 27:
+            #         break
 
-                # If found landmarks...
-                if poseResults.pose_landmarks:
-                    torsoPoints = self.GetTorsoPoints(poseResults.pose_landmarks.landmark)
-                    torsoCenter = self.GetPointsMean(torsoPoints)
+            #     # If found landmarks...
+            #     if poseResults.pose_world_landmarks:
+            #         torsoPoints = self.GetTorsoPoints(poseResults.pose_landmarks.landmark)
+            #         torsoCenter = self.GetPointsMean(torsoPoints)
 
-                    cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, "32FC1")
-                    # cv2.imshow("depth Img", cv_depthImg)
+            #         cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, "32FC1")
+            #         # cv2.imshow("depth Img", cv_depthImg)
 
-                    try:
-                        croppedRgbImg = self.CropTorsoImg(cv_rgbImg, "passthrough", torsoPoints, torsoCenter)
-                        self.msg_targetCroppedRgbImg = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
-                        # cv2.imshow("Cropped RGB", croppedRgbImg)
-                    except:
-                        print("------------- Error in RGB crop -------------")
-                        continue
-                    try:
-                        croppedDepthImg = self.CropTorsoImg(cv_depthImg, "32FC1", torsoPoints, torsoCenter)
-                        self.msg_targetCroppedDepthImg = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
-                        # cv2.imshow("Cropped Depth", croppedDepthImg)
-                        torsoCenter3d = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-                        torsoCenter3d = self.XyzToZxy(torsoCenter3d)
-                        # self.msg_targetPoint = Point(self.GetTorsoDistance(croppedDepthImg), 0, 0)
-                        self.msg_targetPoint.point = torsoCenter3d
-                        self.msg_targetStatus = "Located"
-                    except:
-                        print("------------- Error in depth crop -------------")
-                        continue
+            #         try:
+            #             croppedRgbImg = self.CropTorsoImg(cv_rgbImg, "passthrough", torsoPoints, torsoCenter)
+            #             self.msg_targetCroppedRgbImg = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
+            #             # cv2.imshow("Cropped RGB", croppedRgbImg)
+            #         except:
+            #             print("------------- Error in RGB crop -------------")
+            #             continue
+            #         try:
+            #             croppedDepthImg = self.CropTorsoImg(cv_depthImg, "32FC1", torsoPoints, torsoCenter)
+            #             self.msg_targetCroppedDepthImg = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
+            #             # cv2.imshow("Cropped Depth", croppedDepthImg)
+            #             torsoCenter3d = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
+            #             torsoCenter3d = self.XyzToZxy(torsoCenter3d)
+            #             # self.msg_targetPoint = Point(self.GetTorsoDistance(croppedDepthImg), 0, 0)
+            #             self.msg_targetPoint.point = torsoCenter3d
+            #             self.msg_targetStatus = "Located"
+            #         except:
+            #             print("------------- Error in depth crop -------------")
+            #             continue
 
                 # Nothing detected...
                 else:

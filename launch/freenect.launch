@@ -14,4 +14,6 @@
         <param name="autosize" value="true" />
     </node>
 
+    <include file="$(find mediapipe_track)/launch/rviz.launch"/>
+
 </launch>
