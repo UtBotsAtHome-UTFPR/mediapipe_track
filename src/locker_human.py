@@ -145,21 +145,25 @@ class LockPose():
         lHip = landmark[self.mp_pose.PoseLandmark.LEFT_HIP] 
         rShoulder = landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER]
         lShoulder = landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER]
+        rKnee = landmark[self.mp_pose.PoseLandmark.RIGHT_KNEE]
+        lKnee = landmark[self.mp_pose.PoseLandmark.LEFT_KNEE]
+        rAnkle = landmark[self.mp_pose.PoseLandmark.RIGHT_ANKLE]
+        lAnkle = landmark[self.mp_pose.PoseLandmark.LEFT_ANKLE]
 
         os.system("clear")
-        # print(
-        #     "Valued points:\n- Right Hip: {}\n- Left Hip: {}\n- Right Shoulder: {}\n- Left Shoulder: {}".format(
-        #         rHip, 
-        #         lHip, 
-        #         rShoulder,
-        #         lShoulder))
-        
-        # print("Shoulder:")
-        # shoulderWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER], landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER])
-        # print("SW: {:.2f}".format(shoulderWidth))
-        # print("\nHip:")
-        # hipWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_HIP], landmark[self.mp_pose.PoseLandmark.LEFT_HIP])
-        # print("HW: {:.2f}".format(hipWidth))    
+        print(
+            "Valued points:\n- Right Hip: {}\n- Left Hip: {}\n- Right Shoulder: {}\n- Left Shoulder: {}".format(
+                rHip, 
+                lHip, 
+                rShoulder,
+                lShoulder))
+
+        print("Shoulder:")
+        shoulderWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER], landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER])
+        print("SW: {:.2f}".format(shoulderWidth))
+        print("\nHip:")
+        hipWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_HIP], landmark[self.mp_pose.PoseLandmark.LEFT_HIP])
+        print("HW: {:.2f}".format(hipWidth))    
         
         print("\nTorso:")
         if(self.ChkVisib(rHip) and self.ChkVisib(lHip) and self.ChkVisib(lShoulder) and self.ChkVisib(lShoulder)):
@@ -167,9 +171,25 @@ class LockPose():
             # print("RTH: {:.2f}\n".format(torsoHeightR))   
             torsoHeightL = self.EucDist(lHip, lShoulder)
             # print("LTH: {:.2f}\n".format(torsoHeightL))  
-            meanTH = (torsoHeightL+torsoHeightR)/2
-            print("Mean TH: {:.2f}\n".format(meanTH))
-            self.Statistics(landmark, 0, meanTH)
+            meanTorsoHeight = (torsoHeightL+torsoHeightR)/2
+            print("Mean TH: {:.2f}\n".format(meanTorsoHeight))
+            self.Statistics(landmark, 0, meanTorsoHeight)
+        else:
+            print("WARN: Points not visible")
+
+        print("\nRight Leg:")
+        if(self.ChkVisib(rHip) and self.ChkVisib(rKnee) and self.ChkVisib(rAnkle)):
+            rLegLenght = self.EucDist(rHip, rKnee)+self.EucDist(rKnee,rAnkle)
+            print("Right Leg Lenght: {:.2f}\n".format(rLegLenght))
+            self.Statistics(landmark, 0, rLegLenght)
+        else:
+            print("WARN: Points not visible")
+
+        print("\nLeft Leg:")
+        if(self.ChkVisib(lHip) and self.ChkVisib(lKnee) and self.ChkVisib(lAnkle)):
+            lLegLenght = self.EucDist(lHip, lKnee)+self.EucDist(lKnee,lAnkle)
+            print("Right Leg Lenght: {:.2f}\n".format(lLegLenght))
+            self.Statistics(landmark, 0, lLegLenght)
         else:
             print("WARN: Points not visible")
 
@@ -180,10 +200,10 @@ class LockPose():
             landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].x, 
             landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].y, 
             landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].z)
-        print(" - RSHOULDER xyz: ({}, {}, {})".format(
-            landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].x, 
-            landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].y, 
-            landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].z))
+        # print(" - RSHOULDER xyz: ({}, {}, {})".format(
+        #     landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].x, 
+        #     landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].y, 
+        #     landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER].z))
         leftShoulder = Point(
             landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER].x, 
             landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER].y, 
@@ -323,6 +343,22 @@ class LockPose():
     def ChkVisib(self, lmark):
         return (lmark.visibility > self.MIN_VISIBILITY)
 
+    def MeanPixelColor(self, image):
+        size = image.shape
+        height_elem = 0
+        width_elem = 0
+        while height_elem < size[0]:
+            while width_elem < size[1]:
+                if height_elem == 0 and width_elem == 0:
+                    (b,g,r) = image[height_elem][width_elem]
+                else: 
+                    (b,g,r) = (b,g,r)+(image[height_elem][width_elem]-(b,g,r))/(height_elem+width_elem)              
+                width_elem+=1
+            height_elem+=1
+        print ("Mean Pixel Color - Red: {}, Green: {}, Blue: {}".format(r, g, b))
+        return (r,g,b)
+
+
 # Transformation tree methods
     def SetupTfMsg(self, x, y, z):
         self.msg_tfStamped.header.frame_id = "camera_link"
@@ -368,9 +404,23 @@ class LockPose():
                 # cv2.imshow('MediaPipe Pose', cv_rgbImg)
                 if cv2.waitKey(5) & 0xFF == 27:
                     break
-
+    
                 if poseResults.pose_landmarks:
                     self.LimbsDistances(poseResults.pose_landmarks.landmark)
+
+                if poseResults.pose_landmarks:
+                    torsoPoints = self.GetTorsoPoints(poseResults.pose_landmarks.landmark)
+                    torsoCenter = self.GetPointsMean(torsoPoints)
+
+                    try:
+                        croppedRgbImg = self.CropTorsoImg(cv_rgbImg, "passthrough", torsoPoints, torsoCenter)
+                        self.msg_targetCroppedRgbImg = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
+                        cv2.imshow("Cropped RGB", croppedRgbImg)
+                    except:
+                        print("------------- Error in RGB crop -------------")
+                        continue
+
+                    self.MeanPixelColor(croppedRgbImg)
                 
             # Else -> new RGB and new depth are true...
             if self.newRgbImg == True and self.newDepthImg == True:
