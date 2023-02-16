@@ -15,6 +15,7 @@ from collections import Counter
 import rospy
 ## Message definitions
 from std_msgs.msg import String
+from std_msgs.msg import Bool
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
 from sensor_msgs.msg import Image
 ## Transformation tree
@@ -42,6 +43,7 @@ class LockPose():
         self.msg_targetSkeletonImg      = Image()
         self.msg_rgbImg                 = None      # Image
         self.msg_depthImg               = None      # Image
+        self.get_person_id              = False     # Bool
 
         # To tell if there's a new msg
         self.newRgbImg = False
@@ -51,19 +53,21 @@ class LockPose():
         self.pub_tf = rospy.Publisher(
             "/tf", tfMessage, queue_size=1)
         self.pub_targetStatus = rospy.Publisher(
-            "/apollo/vision/lock/target/status", String, queue_size=10)
+            "/utbots/vision/lock/target/status", String, queue_size=10)
         self.pub_targetPoint = rospy.Publisher(
-            "/apollo/vision/lock/target/point", PointStamped, queue_size=10)
+            "/utbots/vision/lock/target/point", PointStamped, queue_size=10)
         self.pub_targetCroppedRgbImg = rospy.Publisher(
-            "/apollo/vision/lock/target/rgb", Image, queue_size=10)
+            "/utbots/vision/lock/target/rgb", Image, queue_size=10)
         self.pub_targetCroppedDepthImg = rospy.Publisher(
-            "/apollo/vision/lock/target/depth", Image, queue_size=10)
+            "/utbots/vision/lock/target/depth", Image, queue_size=10)
         self.pub_targetSkeletonImg = rospy.Publisher(
-            "/apollo/vision/lock/target/skeletonImage", Image, queue_size=10)
+            "/utbots/vision/lock/target/skeletonImage", Image, queue_size=10)
         self.sub_rgbImg = rospy.Subscriber(
             topic_rgbImg, Image, self.callback_rgbImg)
         self.sub_depthImg = rospy.Subscriber(
             topic_depthImg, Image, self.callback_depthImg)
+        self.sub_getPersonId = rospy.Subscriber(
+            "/utbots/vision/lock/target/get_person_id",Bool, self.callback_getpersonid)
 
         # ROS node
         rospy.init_node('locker_human', anonymous=True)
@@ -90,7 +94,7 @@ class LockPose():
         ## 4 - Left Leg
         ## 5 - Torso Color
         
-        self.iteration = 0
+        self.iteration = [0,0,0,0,0,0]
         self.meanList = [0,0,0,0,0,0]
         self.minList = [0,0,0,0,0,0]
         self.maxList = [0,0,0,0,0,0]
@@ -113,6 +117,9 @@ class LockPose():
         self.msg_depthImg = msg
         self.newDepthImg = True
         # print("- Depth: new msg")
+    
+    def callback_getpersonid(self, msg):
+        self.get_person_id = True
 
 # Basic MediaPipe Pose methods
     def ProcessImg(self, msg_img):
@@ -147,7 +154,7 @@ class LockPose():
 
 # Body data processing
 ## Limbs distances
-    def LimbsDistances(self, landmark):
+    def LimbsDistances(self, landmark, get_id):
 
         rHip = landmark[self.mp_pose.PoseLandmark.RIGHT_HIP]
         lHip = landmark[self.mp_pose.PoseLandmark.LEFT_HIP] 
@@ -157,6 +164,9 @@ class LockPose():
         lKnee = landmark[self.mp_pose.PoseLandmark.LEFT_KNEE]
         rAnkle = landmark[self.mp_pose.PoseLandmark.RIGHT_ANKLE]
         lAnkle = landmark[self.mp_pose.PoseLandmark.LEFT_ANKLE]
+        meanTorsoHeight = 0
+        rLegLenght = 0
+        lLegLenght = 0
 
         os.system("clear")
         # print(
@@ -166,40 +176,58 @@ class LockPose():
         #         rShoulder,
         #         lShoulder))
 
-        # print("Shoulder:")
+        print("Shoulder:")
         shoulderWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER], landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER])
-        print("SW: {:.2f}".format(shoulderWidth))
-        # print("\nHip:")
+        # print("SW: {:.2f}".format(shoulderWidth))
+        if(get_id):
+            self.Statistics(0, shoulderWidth)
+
+        print("\nHip:")
         hipWidth = self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_HIP], landmark[self.mp_pose.PoseLandmark.LEFT_HIP])
-        print("HW: {:.2f}".format(hipWidth))    
+        # print("HW: {:.2f}".format(hipWidth))    
         
-        # print("\nTorso:")
+        if(get_id):
+            self.Statistics(1, hipWidth)
+
+        print("\nTorso:")
         if(self.ChkVisib(rHip) and self.ChkVisib(lHip) and self.ChkVisib(lShoulder) and self.ChkVisib(lShoulder)):
             torsoHeightR = self.EucDist(rHip, rShoulder)
             # print("RTH: {:.2f}\n".format(torsoHeightR))   
             torsoHeightL = self.EucDist(lHip, lShoulder)
             # print("LTH: {:.2f}\n".format(torsoHeightL))  
             meanTorsoHeight = (torsoHeightL+torsoHeightR)/2
-            print("Mean TH: {:.2f}".format(meanTorsoHeight))
-            # self.Statistics(landmark, 0, meanTorsoHeight)
+            # print("Mean TH: {:.2f}".format(meanTorsoHeight))
+            if(get_id):
+                self.Statistics(2, meanTorsoHeight)
         # else:
         #     print("WARN: Points not visible")
 
-        # print("\nRight Leg:")
+        print("\nRight Leg:")
         if(self.ChkVisib(rHip) and self.ChkVisib(rKnee) and self.ChkVisib(rAnkle)):
             rLegLenght = self.EucDist(rHip, rKnee)+self.EucDist(rKnee,rAnkle)
-            print("Right Leg Lenght: {:.2f}".format(rLegLenght))
-            # self.Statistics(landmark, 0, rLegLenght)
+            # print("Right Leg Lenght: {:.2f}".format(rLegLenght))
+            if(get_id):
+                self.Statistics(3, rLegLenght)
         # else:
         #     print("WARN: Points not visible")
 
-        # print("\nLeft Leg:")
+        print("\nLeft Leg:")
         if(self.ChkVisib(lHip) and self.ChkVisib(lKnee) and self.ChkVisib(lAnkle)):
             lLegLenght = self.EucDist(lHip, lKnee)+self.EucDist(lKnee,lAnkle)
-            print("Left Leg Lenght: {:.2f}".format(lLegLenght))
-            # self.Statistics(landmark, 0, lLegLenght)
+            # print("Left Leg Lenght: {:.2f}".format(lLegLenght))
+            if(get_id):
+                self.Statistics(4, lLegLenght)
         # else:
         #     print("WARN: Points not visible")
+
+        if(get_id == False):
+            print("Shoulder: {}\nHip: {}\nTorso: {}\nRight Leg: {}\nLeft Leg: {}".format(shoulderWidth-self.meanList[0], hipWidth-self.meanList[1], meanTorsoHeight-self.meanList[2],
+            rLegLenght-self.meanList[3], lLegLenght-self.meanList[4]))
+            if((abs(shoulderWidth-self.meanList[0]) + abs(hipWidth-self.meanList[1]) + abs(meanTorsoHeight-self.meanList[2]) + abs(rLegLenght-self.meanList[3]) + abs(lLegLenght-self.meanList[4])) < 0.5):
+                print("Is Gustavo")
+            else:
+                print("Is NOT Gustavo")
+
 
         
 
@@ -319,36 +347,36 @@ class LockPose():
         # print("A: ({:.2f}, {:.2f}, {:.2f})\nB: ({:.2f}, {:.2f}, {:.2f})".format(pointA.x,pointA.y,pointA.z,pointB.x,pointB.y,pointB.z))
         return sqrt(pow(pointA.x-pointB.x, 2)+pow(pointA.y-pointB.y, 2)+pow(pointA.z-pointB.z, 2))
 
-    def Statistics(self, landmark, feature, value):
-        if self.iteration < 1:
-            firstValue = (self.EucDist(landmark[self.mp_pose.PoseLandmark.RIGHT_HIP], landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER])+self.EucDist(landmark[self.mp_pose.PoseLandmark.LEFT_HIP], landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER]))/2
-            self.meanList[feature] = firstValue
+    def Statistics(self, feature, value):
+        if self.iteration[feature] < 1:
+            firstValue = value
             self.maxList[feature] = firstValue
             self.minList[feature] = firstValue
-            self.varianceList[feature] = firstValue
-            self.iteration=1
+        elif self.iteration[feature] < 2:
+            self.meanList[feature] = (self.meanList[feature]+value)/2
         else:
             # Moving Average of Streaming Data
-            self.meanList[feature] = self.meanList[feature]+(value-self.meanList[feature])/self.iteration
+            self.meanList[feature] = self.meanList[feature]+(value-self.meanList[feature])/self.iteration[feature]
             ##relevance = 1/self.iteration
             ##self.meanList[feature] = (self.meanList[feature]+value*relevance)/(1+relevance)
 
             # Maximum Value
-            if value > self.maxList[feature]:
-                self.maxList[feature] = value
+            # if value > self.maxList[feature]:
+            #     self.maxList[feature] = value
 
             # Maximum Value
-            if value < self.minList[feature]:
-                self.minList[feature] = value
+            # if value < self.minList[feature]:
+            #     self.minList[feature] = value
             
             # Variance
-            self.varianceList[feature] = self.maxList[feature] - self.minList[feature]
+            # self.varianceList[feature] = self.maxList[feature] - self.minList[feature]
 
-            # Iteration
-            self.iteration+=1
+            # print("Iteration: {}\nGMean: {}\nGMin: {}\nGMax: {}\nGVar: {}".format(self.iteration, 
+            # self.meanList[feature],self.minList[feature],self.maxList[feature],self.varianceList[feature]))
+            print("Iteration: {}, Mean: {}".format(self.iteration[feature], self.meanList[feature]))
 
-            print("Iteration: {}\nGMean: {}\nGMin: {}\nGMax: {}\nGVar: {}".format(self.iteration, 
-            self.meanList[feature],self.minList[feature],self.maxList[feature],self.varianceList[feature]))
+        # Iteration
+        self.iteration[feature]+=1
             
     def ChkVisib(self, lmark):
         return (lmark.visibility > self.MIN_VISIBILITY)
@@ -433,6 +461,42 @@ class LockPose():
             #     self.msg_targetPoint.point.z))
 
             # Basic RGB only TEST
+
+            if self.get_person_id == True:
+                nSamples = 25
+                while (self.iteration[0]+self.iteration[1]+self.iteration[2]+self.iteration[3]+self.iteration[4] < 5*nSamples):
+                    if self.newRgbImg == True:
+                        cv_rgbImg, poseResults = self.ProcessImg(self.msg_rgbImg)
+                        self.DrawLandmarks(cv_rgbImg, poseResults)
+                        self.msg_targetSkeletonImg = self.cvBridge.cv2_to_imgmsg(cv_rgbImg)
+                        # cv2.imshow('MediaPipe Pose', cv_rgbImg)
+                        if cv2.waitKey(5) & 0xFF == 27:
+                            break
+            
+                        if poseResults.pose_landmarks:
+                            self.LimbsDistances(poseResults.pose_world_landmarks.landmark, self.get_person_id)
+
+                        if poseResults.pose_landmarks:
+                            torsoPoints = self.GetTorsoPoints(poseResults.pose_landmarks.landmark)
+                            torsoCenter = self.GetPointsMean(torsoPoints)
+
+                            try:
+                                croppedRgbImg = self.CropTorsoImg(cv_rgbImg, "passthrough", torsoPoints, torsoCenter)
+                                self.msg_targetCroppedRgbImg = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
+                                cv2.imshow("Cropped RGB", croppedRgbImg)
+                            except:
+                                print("------------- Error in RGB crop -------------")
+                                continue
+
+                            # self.MeanPixelColor(croppedRgbImg)
+
+                            height=512
+                            width=512
+                            blank_image = np.zeros((height,width,3), np.uint8)
+                            blank_image[:]=self.get_dominant_color(croppedRgbImg)
+                            cv2.imshow('3 Channel Window', blank_image)
+                self.get_person_id = False      
+
             if self.newRgbImg == True:
                 cv_rgbImg, poseResults = self.ProcessImg(self.msg_rgbImg)
                 self.DrawLandmarks(cv_rgbImg, poseResults)
@@ -441,8 +505,8 @@ class LockPose():
                 if cv2.waitKey(5) & 0xFF == 27:
                     break
     
-                # if poseResults.pose_landmarks:
-                #     self.LimbsDistances(poseResults.pose_world_landmarks.landmark)
+                if poseResults.pose_landmarks:
+                    self.LimbsDistances(poseResults.pose_world_landmarks.landmark, self.get_person_id)
 
                 if poseResults.pose_landmarks:
                     torsoPoints = self.GetTorsoPoints(poseResults.pose_landmarks.landmark)
@@ -462,7 +526,7 @@ class LockPose():
                     width=512
                     blank_image = np.zeros((height,width,3), np.uint8)
                     blank_image[:]=self.get_dominant_color(croppedRgbImg)
-                    cv2.imshow('3 Channel Window', blank_image)
+                    cv2.imshow('3 Channel W-------------------------------------------------------------------------------------------------------indow', blank_image)
                 
             # Else -> new RGB and new depth are true...
             # if self.newRgbImg == True and self.newDepthImg == True:
