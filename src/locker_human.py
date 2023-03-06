@@ -25,10 +25,11 @@ from tf.transformations import quaternion_from_euler
 # Math 
 import numpy as np
 from math import pow, sqrt, tan, radians
+import random
 
 class Person():
     def __init__(self, person_id):
-        self.id = person_id
+        self.GenerateID()
         self.existsID = False
 
         # Body parts objects
@@ -37,9 +38,11 @@ class Person():
         self.torsoHeight = BodyPart("torso")
         self.rightLeg = BodyPart("right_leg")
         self.leftLeg = BodyPart("left_leg")
+        self.rightArm = BodyPart("right_arm")
+        self.leftArm = BodyPart("left_arm")
 
         # Body parts list
-        self.bodyParts = [self.shoulder, self.hip, self.torsoHeight, self.rightLeg, self.leftLeg]
+        self.bodyParts = [self.shoulder, self.hip, self.torsoHeight, self.rightLeg, self.leftLeg, self.rightArm, self.leftArm]
 
         # Body visibility flag
         self.bodyVisible = False
@@ -77,6 +80,9 @@ class Person():
         for limb in self.bodyParts:
             limb.ResetIteration()
 
+    def GenerateID(self):
+        self.id = random.randint(100000,999999)
+
     def CheckNSamples(self, nSamples):
         sum = 0
         for limb in self.bodyParts:
@@ -88,14 +94,29 @@ class Person():
             return True
 
     def EvaluateSimilarity(self):
+        
         for limb in self.bodyParts:
-            limb.CalcDifference()
-            print(limb.name + ": " + str(limb.difference))
-            if(limb.difference > 0.1):
-                rospy.loginfo("Is NOT the operator")
-                return
-        rospy.loginfo("Is the operator")
+            if(limb.inst_samples >= 10):
+                limb.CalcDifference(limb.inst_mean)
+                limb.inst_samples = 1
+                limb.inst_mean = limb.value
+                print(limb.name + ": " + str(limb.difference))
+                if(limb.difference > 0.01):
+                    rospy.loginfo("Is NOT the operator")
+                    return
+                else:               
+                    rospy.loginfo("Is the operator")
+            else:
+                limb.inst_mean = limb.MovingAverage(limb.value, limb.inst_mean, limb.inst_samples)
+                limb.inst_samples += 1
 
+    def WriteLogfile(self):
+        logfile = open("/home/laser/catkin_ws/src/mediapipe_track/src/measures_log.txt", "a+")
+        logfile.write("Subject {}\n".format(self.id))
+        for limb in self.bodyParts:
+            logfile.write("{}: {:.2f}\n".format(limb.name, limb.meanSize))
+        logfile.write("\n")
+        logfile.close()
 
 class BodyPart():
     def __init__(self, name):
@@ -106,13 +127,15 @@ class BodyPart():
         self.MIN_VISIBILITY = 0.5
         self.isVisible = False
 
-        self.iteration = 0
+        self.iteration = 1
         self.meanSize = 0
         self.minSize = 0
         self.maxSize = 0
         self.sizeVariance = 0
 
         self.difference = 0
+        self.inst_samples = 1
+        self.inst_mean = 0
 
     def SetLandmarkList(self, lmark_list):
         self.landmarks_list = lmark_list
@@ -121,8 +144,8 @@ class BodyPart():
     def SetValue(self, value):
         self.value = value
 
-    def CalcDifference(self):
-        self.difference =  abs(self.value - self.meanSize)
+    def CalcDifference(self, value):
+        self.difference =  abs(value - self.meanSize)
 
     def ChkVisib(self, lmark_list):
         for i in range(len(lmark_list)):
@@ -143,7 +166,7 @@ class BodyPart():
             self.meanSize = (self.meanSize+self.value)/2
         else:
             # Moving Average of Streaming Data
-            self.meanSize = self.meanSize+(self.value-self.meanSize)/self.iteration
+            self.meanSize = self.MovingAverage(self.value, self.meanSize, self.iteration)
             ##relevance = 1/self.iteration
             ##self.meanSize = (self.meanSize+self.value*relevance)/(1+relevance)
 
@@ -164,6 +187,10 @@ class BodyPart():
 
         # Iteration
         self.iteration+=1
+
+    def MovingAverage(self, new_value, current_mean, iteration):
+        return current_mean+(new_value-current_mean)/iteration
+
 
 class LockPose():
     def __init__(self, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
@@ -231,7 +258,9 @@ class LockPose():
         self.pose = self.mp_pose.Pose(
             # Pose Configurations
             min_detection_confidence=0.75,
-            min_tracking_confidence=0.9)
+            min_tracking_confidence=0.9,
+            model_complexity=2
+            )
         self.mainLoop()
 
 # Callbacks
@@ -285,6 +314,12 @@ class LockPose():
 ## Limbs distances
     def LimbsSizes(self, landmark, get_id):
         # Evaluated landmark points
+        ## Elbows
+        rElbow = landmark[self.mp_pose.PoseLandmark.RIGHT_ELBOW]
+        lElbow = landmark[self.mp_pose.PoseLandmark.LEFT_ELBOW] 
+        ## Wrists
+        rWrist = landmark[self.mp_pose.PoseLandmark.RIGHT_WRIST]
+        lWrist = landmark[self.mp_pose.PoseLandmark.LEFT_WRIST] 
         ## Hip
         rHip = landmark[self.mp_pose.PoseLandmark.RIGHT_HIP]
         lHip = landmark[self.mp_pose.PoseLandmark.LEFT_HIP] 
@@ -303,18 +338,18 @@ class LockPose():
         self.operator.torsoHeight.SetLandmarkList([lHip, rHip, lShoulder, rShoulder])
         self.operator.rightLeg.SetLandmarkList([rHip, rKnee, rAnkle])
         self.operator.leftLeg.SetLandmarkList([rHip, rKnee, rAnkle])
+        self.operator.rightArm.SetLandmarkList([rShoulder, rElbow, rWrist])
+        self.operator.leftArm.SetLandmarkList([lShoulder, lElbow, lWrist])
 
         os.system("clear")
 
         self.operator.SetBodyPartValue(self.operator.shoulder, self.EucDist(rShoulder, lShoulder))
-
         self.operator.SetBodyPartValue(self.operator.hip, self.EucDist(rHip, lHip))  
-
         self.operator.SetTorsoValue(self.EucDist(lHip, lShoulder), self.EucDist(rHip, rShoulder))
-
         self.operator.SetBodyPartValue(self.operator.rightLeg, self.EucDist(rHip, rKnee)+self.EucDist(rKnee,rAnkle))
-
         self.operator.SetBodyPartValue(self.operator.leftLeg, self.EucDist(lHip, lKnee)+self.EucDist(lKnee,lAnkle))
+        self.operator.SetBodyPartValue(self.operator.rightArm, self.EucDist(rShoulder, rElbow)+self.EucDist(rElbow,rWrist))
+        self.operator.SetBodyPartValue(self.operator.leftArm, self.EucDist(lShoulder, lElbow)+self.EucDist(lElbow,lWrist))
 
         if(get_id == True):
             rospy.loginfo("REGISTERING OPERATOR ID")
@@ -490,14 +525,14 @@ class LockPose():
                 try:
                     croppedRgbImg = self.CropTorsoImg(cv_rgbImg, "passthrough", torsoPoints, torsoCenter)
                     self.msg_targetCroppedRgbImg = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
-                    cv2.imshow("Cropped RGB", croppedRgbImg)
+                    # cv2.imshow("Cropped RGB", croppedRgbImg)
                 except:
                     print("------------- Error in RGB crop -------------")
                     return 0
 
                 if self.newDepthImg == True:
                     cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, "32FC1")
-                    cv2.imshow("depth Img", cv_depthImg)
+                    # cv2.imshow("depth Img", cv_depthImg)
                     try:
                         croppedDepthImg = self.CropTorsoImg(cv_depthImg, "32FC1", torsoPoints, torsoCenter)
                         self.msg_targetCroppedDepthImg = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
@@ -548,6 +583,7 @@ class LockPose():
                 if(self.operator.CheckNSamples(nSamples)):
                     self.get_person_id = False
                     self.operator.existsID = True
+                    self.operator.WriteLogfile()
 
             # Coordinates every method that processes pose landmarks
             lmark_processing = self.LandmarksProcessing()
