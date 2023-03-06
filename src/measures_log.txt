@@ -63,3 +63,21 @@ left_leg: 0.78
 right_leg: 0.44
 left_leg: 0.78
 
+Subject 557774
+shoulder: 0.34
+hip: 0.18
+torso: 0.51
+right_leg: 0.76
+left_leg: 0.78
+right_arm: 0.50
+left_arm: 0.42
+
+Subject 995991
+shoulder: 0.32
+hip: 0.19
+torso: 0.51
+right_leg: 0.75
+left_leg: 0.77
+right_arm: 0.50
+left_arm: 0.43
+
