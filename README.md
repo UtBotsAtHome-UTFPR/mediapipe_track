@@ -24,12 +24,12 @@
                 PY_LOCATION=$(which python3.9)
                 roscd mediapipe_track/src
                 python3.9 -m virtualenv venv --python=$PY_LOCATION # Create virtual env
+                source venv/bin/activate # Enter virtual env
+                python -m pip install -r requirements.txt
                 ```
             - You should **only use Mediapipe with the virtual Python executable**
                 ```bash
-                roscd mediapipe_track/src
                 source venv/bin/activate # Enter virtual env
-                python -m pip install -r requirements.txt
                 python locker_human.py   # Instead of "rosrun mediapipe_track locker_human.py"
                 ```
         - **Pip requirements**
