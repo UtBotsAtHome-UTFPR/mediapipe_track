@@ -14,6 +14,12 @@
             cd ..
             catkin_make
             ```
+
+        - **Pip requirements (skip if using Jetson + Ubuntu 18)**
+            ```bash
+            roscd mediapipe_track/src
+            python3 -m pip install -r requirements.txt
+            ```
         - **Only for Jetson Nano + Ubuntu 18**
             - Install Python 3.9 and virtualenv
                 ```bash
@@ -32,11 +38,7 @@
                 source venv/bin/activate # Enter virtual env
                 python locker_human.py   # Instead of "rosrun mediapipe_track locker_human.py"
                 ```
-        - **Pip requirements**
-            ```bash
-            roscd mediapipe_track/src
-            python3 -m pip install -r requirements.txt
-            ```
+
     - #### Running
 
         - First, run freenect:
