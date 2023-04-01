@@ -41,8 +41,7 @@
 
     - #### Running
 
-        - First, run freenect:
-
+        - First, run freenect::
             ```
             roslaunch mediapipe_track freenect.launch
             ```
