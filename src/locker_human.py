@@ -2,7 +2,7 @@
 
 # Mediapipe imports
 import cv2
-from mediapipe import mp
+import mediapipe as mp
 
 # Image processing
 from cv_bridge import CvBridge
