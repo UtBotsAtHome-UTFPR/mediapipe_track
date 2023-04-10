@@ -1,9 +1,9 @@
-- **mediapipe_track**
+**mediapipe_track**
     - ROS package that applies [MediaPipe Pose solution](https://google.github.io/mediapipe/solutions/pose) 
     - Tested Kinect V1 RGB and Depth images 
     - Important addition to MediaPipe Pose: ability to calculate and detect the person's 3D position and publish this information in ROS Topics so the robot can know its relative position from the person detected.
 
-- ### Getting started
+### Getting started
     - #### Installation
         - **Dependencies**
             - This package depends on [freenect_launch](https://github.com/ros-drivers/freenect_stack) and runs on python, with mediapipe library.
@@ -39,7 +39,7 @@
                 python locker_human.py   # Instead of "rosrun mediapipe_track locker_human.py"
                 ```
 
-    - #### Running
+    #### Running
 
         - First, run freenect::
             ```
