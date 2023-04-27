@@ -18,6 +18,7 @@ from std_msgs.msg import Bool
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
 from hri_msgs.msg import Skeleton2D
 from sensor_msgs.msg import Image
+from vision_msgs.msg import PointArray
 ## Transformation tree
 from tf.msg import tfMessage
 from geometry_msgs.msg import TransformStamped
@@ -84,23 +85,19 @@ class LockPose():
         # Messages
         self.msg_tfStamped              = TransformStamped()
         self.msg_targetStatus           = "?" # String
-        self.msg_targetPoint            = PointStamped()   # Point
-        self.msg_targetPoint.header.frame_id = "target"
         self.msg_targetCroppedRgbTorso    = Image()
         self.msg_targetCroppedDepthTorso  = Image()
         self.msg_targetSkeletonImg      = Image()
         self.msg_rgbImg                 = None      # Image
         self.msg_depthImg               = None      # Image
-        self.get_person_id              = False     # Bool
+        self.msg_poseLandmarks          = PointArray()
+        
 
         # To tell if there's a new msg
         self.newRgbImg = False
         self.newDepthImg = False
 
         # Publishers and Subscribers
-        self.sub_bodyID = "0"
-        self.sub_bodyID = rospy.Subscriber(
-            "/humans/bodies/tracked", String, self.callback_bodyid)
         self.sub_rgbImg = rospy.Subscriber(
             topic_rgbImg, Image, self.callback_rgbImg)
         self.sub_depthImg = rospy.Subscriber(
@@ -118,6 +115,8 @@ class LockPose():
             "/humans/bodies/croppedTorso/depth", Image, queue_size=10)
         self.pub_targetSkeletonImg = rospy.Publisher(
             "/humans/bodies/skeletonImg", Image, queue_size=10)
+        self.pub_poseLandmarks = rospy.Publisher(
+            "/utbots/vision/lock/poseLandmarks", PointArray, self.callback_poseLandmarks)
 
         # ROS node
         rospy.init_node('locker_human', anonymous=True)
@@ -137,7 +136,6 @@ class LockPose():
 
         # Person
         self.trackedBody = Person(self.sub_bodyID)
-        self.newID = False
 
         # Calls main loop
         self.pose = self.mp_pose.Pose(
@@ -159,9 +157,6 @@ class LockPose():
         self.newDepthImg = True
         # print("- Depth: new msg")
     
-    def callback_bodyid(self, msg):
-        self.sub_bodyID = msg
-
 # Basic MediaPipe Pose methods
     def ProcessImg(self):
         # Conversion to cv image
@@ -223,6 +218,12 @@ class LockPose():
         self.trackedBody.leftLeg.SetLandmarkList([lHip, lKnee, lAnkle])
         self.trackedBody.rightArm.SetLandmarkList([rShoulder, rElbow, rWrist])
         self.trackedBody.leftArm.SetLandmarkList([lShoulder, lElbow, lWrist])
+
+    def SetLandmarkPoints(self, landmark):
+        landmarks = []
+        for lmark in landmarks:
+            landmarks.append(self.PointByLmarks(landmarks[lmark]))
+        self.msg_poseLandmarks.points = landmarks
 
 ## Torso
     def GetTorsoPoints(self):
@@ -354,6 +355,7 @@ class LockPose():
                 self.DefineBodyStructure(poseResults.pose_landmarks.landmark)    
                 torsoPoints = self.GetTorsoPoints()
                 torsoCenter = self.GetPointsMean(torsoPoints)
+                self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
 
                 try:
                     croppedRgbImg = self.CropTorsoImg(cv_rgbImg, "passthrough", torsoPoints, torsoCenter)
@@ -389,8 +391,8 @@ class LockPose():
         self.pub_targetCroppedRgbTorso.publish(self.msg_targetCroppedRgbTorso)
         self.pub_targetCroppedDepthTorso.publish(self.msg_targetCroppedDepthTorso)
         self.pub_targetStatus.publish(self.msg_targetStatus)
-        self.pub_targetPoint.publish(self.msg_targetPoint)
         self.pub_targetSkeletonImg.publish(self.msg_targetSkeletonImg)
+        self.pub_poseLandmarks.publish(self.msg_poseLandmarks)
         # self.SetupTfMsg(self.msg_targetPoint.point.x, self.msg_targetPoint.point.y, self.msg_targetPoint.point.z)
 
 # Main
