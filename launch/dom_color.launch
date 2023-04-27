@@ -1,0 +1,5 @@
+<launch>
+
+    <node pkg="mediapipe_track" type="dom_torso_color.py" name="dom_torso_color" output="screen"/>
+
+</launch>
