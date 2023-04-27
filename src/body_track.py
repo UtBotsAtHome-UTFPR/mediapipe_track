@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 
@@ -16,7 +16,6 @@ import rospy
 from std_msgs.msg import String
 from std_msgs.msg import Bool
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
-from hri_msgs.msg import Skeleton2D
 from sensor_msgs.msg import Image
 from vision_msgs.msg import PointArray
 ## Transformation tree
@@ -30,7 +29,7 @@ from math import pow, sqrt, tan, radians
 import random
 
 class Person():
-    def __init__(self, person_id):
+    def __init__(self):
         self.existsID = False
 
         # Body parts objects
@@ -116,7 +115,7 @@ class LockPose():
         self.pub_targetSkeletonImg = rospy.Publisher(
             "/humans/bodies/skeletonImg", Image, queue_size=10)
         self.pub_poseLandmarks = rospy.Publisher(
-            "/utbots/vision/lock/poseLandmarks", PointArray, self.callback_poseLandmarks)
+            "/utbots/vision/lock/poseLandmarks", PointArray, queue_size=10)
 
         # ROS node
         rospy.init_node('locker_human', anonymous=True)
@@ -135,7 +134,7 @@ class LockPose():
         self.mp_pose = mp.solutions.pose
 
         # Person
-        self.trackedBody = Person(self.sub_bodyID)
+        self.trackedBody = Person()
 
         # Calls main loop
         self.pose = self.mp_pose.Pose(

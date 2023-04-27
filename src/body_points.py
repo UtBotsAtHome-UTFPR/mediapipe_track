@@ -44,7 +44,7 @@ class BodyPoints():
             topic_rgbImg, Image, self.callback_rgbImg)
         self.sub_depthImg = rospy.Subscriber(
             topic_depthImg, Image, self.callback_depthImg)
-        self.sub_poseLandmarks = rospy.Publisher(
+        self.sub_poseLandmarks = rospy.Subscriber(
             "/utbots/vision/lock/poseLandmarks", PointArray, self.callback_poseLandmarks)
 
         self.pub_tf = rospy.Publisher(
