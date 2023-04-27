@@ -211,7 +211,6 @@ class LockPose():
         landmarks = []
         for lmark in self.mp_pose.PoseLandmark:
             landmarks.append(self.PointByLmarks(landmark[lmark]))
-            rospy.loginfo(lmark)
         self.msg_poseLandmarks.points = landmarks
 
     def PointByLmarks(self, landmark):
@@ -231,13 +230,6 @@ class LockPose():
             self.loopRate.sleep()
             self.PublishEverything()
 
-            # print("\nTARGET")
-            # print(" - status: {}".format(self.msg_targetStatus))
-            # print(" - xyz: ({}, {}, {})".format(
-            #     self.msg_targetPoint.point.x, 
-            #     self.msg_targetPoint.point.y, 
-            #     self.msg_targetPoint.point.z))
-
             if self.newRgbImg == True:
                 self.newRgbImg = False
 
@@ -250,28 +242,6 @@ class LockPose():
 
                     self.DefineBodyStructure(poseResults.pose_landmarks.landmark)    
                     self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
-
-                    # if self.newDepthImg == True:
-                    #     cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, "32FC1")
-                    #     try:
-                    #         croppedDepthImg = self.CropTorsoImg(cv_depthImg, "32FC1", torsoPoints, torsoCenter)
-                    #         self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
-                    #         # torsoCenter3d = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-                    #         # torsoCenter3d = self.XyzToZxy(torsoCenter3d)
-                    #         torsoCenter3d = self.ExtractDepthPoint(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-                    #         # self.msg_targetPoint = Point(self.GetTorsoDistance(croppedDepthImg), 0, 0)
-                    #         self.msg_targetPoint.point = torsoCenter3d
-                    #         self.msg_targetStatus = "Located"
-                    #     except:
-                    #         rospy.loginfo("------------- Error in depth crop -------------")
-                    #         return 0                
-                    # # Nothing detected...
-                    # else:
-                    #     t_now = rospy.get_time()
-                    #     if (t_now - self.t_last > self.t_timeout and self.msg_targetStatus != "?"):
-                    #         self.t_last = t_now
-                    #         self.msg_targetStatus = "?"
-
               
 if __name__ == "__main__":
     LockPose(
