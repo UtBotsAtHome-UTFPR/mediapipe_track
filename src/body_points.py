@@ -26,14 +26,15 @@ class BodyPoints():
         self.camFov_horizontal = camFov_horizontal
 
         # Messages
-        self.msg_tfStamped              = TransformStamped()
-        self.msg_targetPoint            = PointStamped()   # Point
+        self.msg_tfStamped                   = TransformStamped()
+        self.msg_targetPoint                 = PointStamped()   # Point
         self.msg_targetPoint.header.frame_id = "target"
-        self.msg_targetCroppedRgbTorso    = Image()
-        self.msg_targetCroppedDepthTorso  = Image()
-        self.msg_rgbImg                 = None      # Image
-        self.msg_depthImg               = None      # Image
-        self.msg_poseLandmarks          = PointArray()
+        self.msg_targetStatus                = "?"
+        self.msg_targetCroppedRgbTorso       = Image()
+        self.msg_targetCroppedDepthTorso     = Image()
+        self.msg_rgbImg                      = None      # Image
+        self.msg_depthImg                    = None      # Image
+        self.msg_poseLandmarks               = PointArray()
 
         # To tell if there's a new msg
         self.newRgbImg = False
@@ -55,6 +56,8 @@ class BodyPoints():
             "/utbots/vision/lock/croppedTorso/rgb", Image, queue_size=10)
         self.pub_targetCroppedDepthTorso = rospy.Publisher(
             "/utbots/vision/lock/croppedTorso/depth", Image, queue_size=10)
+        self.pub_targetStatus = rospy.Publisher(
+            "/utbots/vision/lock/status", String, queue_size=10)
 
         # ROS node
         rospy.init_node('body_points', anonymous=True)
@@ -81,8 +84,12 @@ class BodyPoints():
     
     def callback_poseLandmarks(self, msg):
         self.msg_poseLandmarks = msg
+        self.newPoseLandmarks = True
 
 ## Torso
+    def GetTorsoPoints(self, landmarks):
+        return [landmarks[12], landmarks[11], landmarks[24], landmarks[23]]
+
     def CropTorsoImg(self, img, imgEncoding, torsoPoints, torsoCenter):
         if imgEncoding == "32FC1":
             imageHeight, imageWidth = img.shape
@@ -109,6 +116,53 @@ class BodyPoints():
 
         depthMean = np.mean(rowMeans)
         return depthMean
+
+    def ProcessTorso(self):
+        if self.newPoseLandmarks == True:
+            self.newPoseLandmarks = False
+
+            torsoPoints = self.GetTorsoPoints(self.msg_poseLandmarks.points)
+            torsoCenter = self.GetPointsMean(torsoPoints)
+
+            if self.newRgbImg == True:
+                self.newRgbImg = False
+                cv_rbgImg = self.cvBridge.cv2_to_imgmsg(self.msg_rgbImg)
+                try:
+                    croppedRgbImg = self.CropTorsoImg(cv_rbgImg, "passthrough", torsoPoints, torsoCenter)
+                    self.msg_targetCroppedRgbTorso = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
+                except:
+                    rospy.loginfo("------------- Error in RGB crop -------------")
+                    return 0
+
+            if self.newDepthImg == True:
+                self.newDepthImg = False
+                cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, "32FC1")
+                try:
+                    croppedDepthImg = self.CropTorsoImg(cv_depthImg, "32FC1", torsoPoints, torsoCenter)
+                    self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
+                    # torsoCenter3d = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
+                    # torsoCenter3d = self.XyzToZxy(torsoCenter3d)
+                    torsoCenter3d = self.ExtractDepthPoint(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
+                    # self.msg_targetPoint = Point(self.GetTorsoDistance(croppedDepthImg), 0, 0)
+                    self.msg_targetPoint.point = torsoCenter3d
+                    self.msg_targetStatus = "Located"
+                except:
+                    rospy.loginfo("------------- Error in depth crop -------------")
+                    return 0                
+            # Nothing detected...
+            else:
+                t_now = rospy.get_time()
+                if (t_now - self.t_last > self.t_timeout and self.msg_targetStatus != "?"):
+                    self.t_last = t_now
+                    self.msg_targetPoint.point = Point(0, 0, 0)
+                    self.msg_targetStatus = "?"
+
+        rospy.loginfo("\nTARGET")
+        rospy.loginfo(" - status: {}".format(self.msg_targetStatus))
+        rospy.loginfo(" - xyz: ({}, {}, {})".format(
+            self.msg_targetPoint.point.x, 
+            self.msg_targetPoint.point.y, 
+            self.msg_targetPoint.point.z))
 
 # Points calculations
     def GetPointsMean(self, points):
@@ -189,57 +243,12 @@ class BodyPoints():
         msg_tf = tfMessage([self.msg_tfStamped])
         self.pub_tf.publish(msg_tf)
 
-    def LandmarksProcessing(self):  # Return info: 1 -> break; 0 -> continue
-        if self.newRgbImg == True:
-            self.newRgbImg = False
-
-            cv_rgbImg, poseResults = self.ProcessImg()
-            self.DrawLandmarks(cv_rgbImg, poseResults)
-            self.msg_targetSkeletonImg = self.cvBridge.cv2_to_imgmsg(cv_rgbImg)
-
-            # Pose WORLD Landmarks, otherwise the data format does not represent metric real distances
-            if poseResults.pose_world_landmarks:
-
-                self.DefineBodyStructure(poseResults.pose_landmarks.landmark)    
-                torsoPoints = self.GetTorsoPoints()
-                torsoCenter = self.GetPointsMean(torsoPoints)
-
-                try:
-                    croppedRgbImg = self.CropTorsoImg(cv_rgbImg, "passthrough", torsoPoints, torsoCenter)
-                    self.msg_targetCroppedRgbTorso = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
-                except:
-                    rospy.loginfo("------------- Error in RGB crop -------------")
-                    return 0
-
-                if self.newDepthImg == True:
-                    cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, "32FC1")
-                    try:
-                        croppedDepthImg = self.CropTorsoImg(cv_depthImg, "32FC1", torsoPoints, torsoCenter)
-                        self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
-                        # torsoCenter3d = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-                        # torsoCenter3d = self.XyzToZxy(torsoCenter3d)
-                        torsoCenter3d = self.ExtractDepthPoint(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-                        # self.msg_targetPoint = Point(self.GetTorsoDistance(croppedDepthImg), 0, 0)
-                        self.msg_targetPoint.point = torsoCenter3d
-                        self.msg_targetStatus = "Located"
-                    except:
-                        rospy.loginfo("------------- Error in depth crop -------------")
-                        return 0                
-                # Nothing detected...
-                else:
-                    t_now = rospy.get_time()
-                    if (t_now - self.t_last > self.t_timeout and self.msg_targetStatus != "?"):
-                        self.t_last = t_now
-                        self.msg_targetPoint.point = Point(0, 0, 0)
-                        self.msg_targetStatus = "?"
-
 # Nodes Publish
     def PublishEverything(self):
         self.pub_targetCroppedRgbTorso.publish(self.msg_targetCroppedRgbTorso)
         self.pub_targetCroppedDepthTorso.publish(self.msg_targetCroppedDepthTorso)
         self.pub_targetStatus.publish(self.msg_targetStatus)
         self.pub_targetPoint.publish(self.msg_targetPoint)
-        self.pub_targetSkeletonImg.publish(self.msg_targetSkeletonImg)
         # self.SetupTfMsg(self.msg_targetPoint.point.x, self.msg_targetPoint.point.y, self.msg_targetPoint.point.z)
 
 # Main
@@ -247,21 +256,7 @@ class BodyPoints():
         while rospy.is_shutdown() == False:
             self.loopRate.sleep()
             self.PublishEverything()
-
-            # print("\nTARGET")
-            # print(" - status: {}".format(self.msg_targetStatus))
-            # print(" - xyz: ({}, {}, {})".format(
-            #     self.msg_targetPoint.point.x, 
-            #     self.msg_targetPoint.point.y, 
-            #     self.msg_targetPoint.point.z))
-
-            # Coordinates every method that processes pose landmarks
-            lmark_processing = self.LandmarksProcessing()
-            # Errors in the landmark processing can alter the loop flows
-            if lmark_processing == -1:
-                break
-            elif lmark_processing == 0:
-                continue
+            self.ProcessTorso()
               
 if __name__ == "__main__":
     BodyPoints(
