@@ -83,15 +83,6 @@ class BodyPoints():
         self.msg_poseLandmarks = msg
 
 ## Torso
-    def GetTorsoPoints(self):
-        return [self.PointByLmarks(self.trackedBody.shoulder.landmarks_list[1]),
-                self.PointByLmarks(self.trackedBody.shoulder.landmarks_list[0]),
-                self.PointByLmarks(self.trackedBody.hip.landmarks_list[1]),
-                self.PointByLmarks(self.trackedBody.hip.landmarks_list[0])]
-
-    def PointByLmarks(self, landmark):
-        return Point(landmark.x, landmark.y, landmark.z)
-
     def CropTorsoImg(self, img, imgEncoding, torsoPoints, torsoCenter):
         if imgEncoding == "32FC1":
             imageHeight, imageWidth = img.shape
