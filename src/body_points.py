@@ -18,7 +18,8 @@ from geometry_msgs.msg import TransformStamped
 # Math 
 import numpy as np
 from math import pow, sqrt, tan, radians
-class LockPose():
+
+class BodyPoints():
     def __init__(self, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
         # Image FOV for trig calculations
         self.camFov_vertical = camFov_vertical
@@ -32,6 +33,7 @@ class LockPose():
         self.msg_targetCroppedDepthTorso  = Image()
         self.msg_rgbImg                 = None      # Image
         self.msg_depthImg               = None      # Image
+        self.msg_poseLandmarks          = PointArray()
 
         # To tell if there's a new msg
         self.newRgbImg = False
@@ -55,7 +57,7 @@ class LockPose():
             "/humans/bodies/croppedTorso/depth", Image, queue_size=10)
 
         # ROS node
-        rospy.init_node('locker_human', anonymous=True)
+        rospy.init_node('body_points', anonymous=True)
 
         # Time
         self.loopRate = rospy.Rate(30)
@@ -64,23 +66,6 @@ class LockPose():
 
         # Cv
         self.cvBridge = CvBridge()
-
-        # Mediapipe
-        self.mp_drawing = mp.solutions.drawing_utils
-        self.mp_drawing_styles = mp.solutions.drawing_styles
-        self.mp_pose = mp.solutions.pose
-
-        # Person
-        self.trackedBody = Person(self.sub_bodyID)
-        self.newID = False
-
-        # Calls main loop
-        self.pose = self.mp_pose.Pose(
-            # Pose Configurations
-            min_detection_confidence=0.75,
-            min_tracking_confidence=0.9,
-            model_complexity=2
-            )
         self.mainLoop()
 
 # Callbacks
@@ -94,70 +79,8 @@ class LockPose():
         self.newDepthImg = True
         # print("- Depth: new msg")
     
-    def callback_bodyid(self, msg):
-        self.sub_bodyID = msg
-
-# Basic MediaPipe Pose methods
-    def ProcessImg(self):
-        # Conversion to cv image
-        cvImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, "bgr8")
-
-        # Not writeable passes by reference (better performance)
-        cvImg.flags.writeable = False
-
-        # Converts BGR to RGB
-        cvImg = cv2.cvtColor(cvImg, cv2.COLOR_BGR2RGB)
-
-        # Image processing
-        poseResults = self.pose.process(cv2.cvtColor(cvImg, cv2.COLOR_BGR2RGB))
-
-        # To draw the hand annotations on the image
-        cvImg.flags.writeable = True
-
-        # Back to BGR
-        cvImg = cv2.cvtColor(cvImg, cv2.COLOR_RGB2BGR)
-
-        # Returns
-        return cvImg, poseResults
-
-    def DrawLandmarks(self, cv_rgbImg, poseResults):
-        self.mp_drawing.draw_landmarks(
-            cv_rgbImg,
-            poseResults.pose_landmarks,
-            self.mp_pose.POSE_CONNECTIONS,
-            landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style())
-
-
-# Body data processing
-## Limbs distances
-    def DefineBodyStructure(self, landmark):
-        # Evaluated landmark points
-        ## Elbows
-        rElbow = landmark[self.mp_pose.PoseLandmark.RIGHT_ELBOW]
-        lElbow = landmark[self.mp_pose.PoseLandmark.LEFT_ELBOW] 
-        ## Wrists
-        rWrist = landmark[self.mp_pose.PoseLandmark.RIGHT_WRIST]
-        lWrist = landmark[self.mp_pose.PoseLandmark.LEFT_WRIST] 
-        ## Hip
-        rHip = landmark[self.mp_pose.PoseLandmark.RIGHT_HIP]
-        lHip = landmark[self.mp_pose.PoseLandmark.LEFT_HIP] 
-        ## Shoulder
-        rShoulder = landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER]
-        lShoulder = landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER]
-        ## Knees
-        rKnee = landmark[self.mp_pose.PoseLandmark.RIGHT_KNEE]
-        lKnee = landmark[self.mp_pose.PoseLandmark.LEFT_KNEE]
-        ## Ankles
-        rAnkle = landmark[self.mp_pose.PoseLandmark.RIGHT_ANKLE]
-        lAnkle = landmark[self.mp_pose.PoseLandmark.LEFT_ANKLE]
-
-        self.trackedBody.shoulder.SetLandmarkList([lShoulder, rShoulder])
-        self.trackedBody.hip.SetLandmarkList([lHip, rHip])
-        self.trackedBody.torsoHeight.SetLandmarkList([lHip, rHip, lShoulder, rShoulder])
-        self.trackedBody.rightLeg.SetLandmarkList([rHip, rKnee, rAnkle])
-        self.trackedBody.leftLeg.SetLandmarkList([lHip, lKnee, lAnkle])
-        self.trackedBody.rightArm.SetLandmarkList([rShoulder, rElbow, rWrist])
-        self.trackedBody.leftArm.SetLandmarkList([lShoulder, lElbow, lWrist])
+    def callback_poseLandmarks(self, msg):
+        self.msg_poseLandmarks = msg
 
 ## Torso
     def GetTorsoPoints(self):
@@ -350,7 +273,7 @@ class LockPose():
                 continue
               
 if __name__ == "__main__":
-    LockPose(
+    BodyPoints(
         "/camera/rgb/image_raw",
         "/camera/depth_registered/image_raw",
         43,
