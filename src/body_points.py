@@ -47,6 +47,8 @@ class BodyPoints():
             topic_depthImg, Image, self.callback_depthImg)
         self.sub_poseLandmarks = rospy.Subscriber(
             "/utbots/vision/lock/poseLandmarks", PointArray, self.callback_poseLandmarks)
+        self.sub_targetStatus = rospy.Subscriber(
+            "/utbots/vision/lock/status", String, self.callback_targetStatus)
 
         self.pub_tf = rospy.Publisher(
             "/tf", tfMessage, queue_size=1)
@@ -56,8 +58,8 @@ class BodyPoints():
             "/utbots/vision/lock/croppedTorso/rgb", Image, queue_size=10)
         self.pub_targetCroppedDepthTorso = rospy.Publisher(
             "/utbots/vision/lock/croppedTorso/depth", Image, queue_size=10)
-        self.pub_targetStatus = rospy.Publisher(
-            "/utbots/vision/lock/status", String, queue_size=10)
+        # self.pub_targetStatus = rospy.Publisher(
+        #     "/utbots/vision/lock/status", String, queue_size=10)
 
         # ROS node
         rospy.init_node('body_points', anonymous=True)
@@ -85,6 +87,9 @@ class BodyPoints():
     def callback_poseLandmarks(self, msg):
         self.msg_poseLandmarks = msg
         self.newPoseLandmarks = True
+
+    def callback_targetStatus(self, msg):
+        self.msg_targetStatus = msg
 
 ## Torso
     def GetTorsoPoints(self, landmarks):
@@ -118,7 +123,8 @@ class BodyPoints():
         return depthMean
 
     def ProcessTorso(self):
-        if self.newPoseLandmarks == True:
+        
+        if self.newPoseLandmarks == True and self.msg_targetStatus.data == "Detected":
             self.newPoseLandmarks = False
 
             torsoPoints = self.GetTorsoPoints(self.msg_poseLandmarks.points)
@@ -126,7 +132,7 @@ class BodyPoints():
 
             if self.newRgbImg == True:
                 self.newRgbImg = False
-                cv_rbgImg = self.cvBridge.cv2_to_imgmsg(self.msg_rgbImg)
+                cv_rbgImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, "bgr8")
                 try:
                     croppedRgbImg = self.CropTorsoImg(cv_rbgImg, "passthrough", torsoPoints, torsoCenter)
                     self.msg_targetCroppedRgbTorso = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
@@ -247,7 +253,7 @@ class BodyPoints():
     def PublishEverything(self):
         self.pub_targetCroppedRgbTorso.publish(self.msg_targetCroppedRgbTorso)
         self.pub_targetCroppedDepthTorso.publish(self.msg_targetCroppedDepthTorso)
-        self.pub_targetStatus.publish(self.msg_targetStatus)
+        # self.pub_targetStatus.publish(self.msg_targetStatus)
         self.pub_targetPoint.publish(self.msg_targetPoint)
         # self.SetupTfMsg(self.msg_targetPoint.point.x, self.msg_targetPoint.point.y, self.msg_targetPoint.point.z)
 

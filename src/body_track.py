@@ -80,7 +80,10 @@ class LockPose():
         self.msg_rgbImg                 = None      # Image
         self.msg_depthImg               = None      # Image
         self.msg_poseLandmarks          = PointArray()
-        
+        self.msg_targetStatus                = "?"
+        self.pub_targetStatus = rospy.Publisher(
+        "/utbots/vision/lock/status", String, queue_size=10)
+
 
         # To tell if there's a new msg
         self.newRgbImg = False
@@ -95,15 +98,11 @@ class LockPose():
         self.pub_tf = rospy.Publisher(
             "/tf", tfMessage, queue_size=1)
         self.pub_targetStatus = rospy.Publisher(
-            "/humans/bodies/status", String, queue_size=10)
+            "/utbots/vision/lock/status", String, queue_size=10)
         self.pub_targetPoint = rospy.Publisher(
-            "/humans/bodies/torsoPoint", PointStamped, queue_size=10)
-        self.pub_targetCroppedRgbTorso = rospy.Publisher(
-            "/humans/bodies/croppedTorso/rgb", Image, queue_size=10)
-        self.pub_targetCroppedDepthTorso = rospy.Publisher(
-            "/humans/bodies/croppedTorso/depth", Image, queue_size=10)
+            "/utbots/vision/lock/torsoPoint", PointStamped, queue_size=10)
         self.pub_targetSkeletonImg = rospy.Publisher(
-            "/humans/bodies/skeletonImg", Image, queue_size=10)
+            "/utbots/vision/lock/skeletonImg", Image, queue_size=10)
         self.pub_poseLandmarks = rospy.Publisher(
             "/utbots/vision/lock/poseLandmarks", PointArray, queue_size=10)
 
@@ -218,11 +217,10 @@ class LockPose():
 
 # Nodes Publish
     def PublishEverything(self):
-        self.pub_targetCroppedRgbTorso.publish(self.msg_targetCroppedRgbTorso)
-        self.pub_targetCroppedDepthTorso.publish(self.msg_targetCroppedDepthTorso)
         self.pub_targetStatus.publish(self.msg_targetStatus)
         self.pub_targetSkeletonImg.publish(self.msg_targetSkeletonImg)
         self.pub_poseLandmarks.publish(self.msg_poseLandmarks)
+        self.pub_targetStatus.publish(self.msg_targetStatus)
 
 # Main
     def mainLoop(self):
@@ -239,9 +237,11 @@ class LockPose():
 
                 # Pose WORLD Landmarks, otherwise the data format does not represent metric real distances
                 if poseResults.pose_world_landmarks:
-
                     self.DefineBodyStructure(poseResults.pose_landmarks.landmark)    
                     self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
+                    self.msg_targetStatus = "Detected"
+                else:
+                    self.msg_targetStatus = "Not Detected"
               
 if __name__ == "__main__":
     LockPose(
