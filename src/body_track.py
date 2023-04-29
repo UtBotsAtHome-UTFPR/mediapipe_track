@@ -245,7 +245,7 @@ class LockPose():
               
 if __name__ == "__main__":
     LockPose(
-        "/camera/rgb/image_raw",
+        "/utbots/vision/person",
         "/camera/depth_registered/image_raw",
         43,
         57)
