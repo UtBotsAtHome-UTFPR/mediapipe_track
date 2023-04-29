@@ -29,7 +29,6 @@ class BodyPoints():
         self.msg_tfStamped                   = TransformStamped()
         self.msg_targetPoint                 = PointStamped()   # Point
         self.msg_targetPoint.header.frame_id = "target"
-        self.msg_targetStatus                = "?"
         self.msg_targetCroppedRgbTorso       = Image()
         self.msg_targetCroppedDepthTorso     = Image()
         self.msg_rgbImg                      = None      # Image
@@ -39,6 +38,7 @@ class BodyPoints():
         # To tell if there's a new msg
         self.newRgbImg = False
         self.newDepthImg = False
+        self.newPoseLandmarks = False
 
         # Publishers and Subscribers
         self.sub_rgbImg = rospy.Subscriber(
@@ -46,18 +46,18 @@ class BodyPoints():
         self.sub_depthImg = rospy.Subscriber(
             topic_depthImg, Image, self.callback_depthImg)
         self.sub_poseLandmarks = rospy.Subscriber(
-            "/utbots/vision/lock/poseLandmarks", PointArray, self.callback_poseLandmarks)
+            "/utbots/vision/person/pose/poseLandmarks", PointArray, self.callback_poseLandmarks)
         self.sub_targetStatus = rospy.Subscriber(
-            "/utbots/vision/lock/status", String, self.callback_targetStatus)
+            "/utbots/vision/person/pose/status", String, self.callback_targetStatus)
 
         self.pub_tf = rospy.Publisher(
             "/tf", tfMessage, queue_size=1)
         self.pub_targetPoint = rospy.Publisher(
-            "/utbots/vision/lock/torsoPoint", PointStamped, queue_size=10)
+            "/utbots/vision/person/selected/torsoPoint", PointStamped, queue_size=10)
         self.pub_targetCroppedRgbTorso = rospy.Publisher(
-            "/utbots/vision/lock/croppedTorso/rgb", Image, queue_size=10)
+            "/utbots/vision/person/selected/croppedTorso/rgb", Image, queue_size=10)
         self.pub_targetCroppedDepthTorso = rospy.Publisher(
-            "/utbots/vision/lock/croppedTorso/depth", Image, queue_size=10)
+            "/utbots/vision/person/selected/croppedTorso/depth", Image, queue_size=10)
         # self.pub_targetStatus = rospy.Publisher(
         #     "/utbots/vision/lock/status", String, queue_size=10)
 

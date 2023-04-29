@@ -11,12 +11,9 @@ from cv_bridge import CvBridge
 import rospy
 ## Message definitions
 from std_msgs.msg import String
-from geometry_msgs.msg import PointStamped, Point, TransformStamped
+from geometry_msgs.msg import Point
 from sensor_msgs.msg import Image
 from vision_msgs.msg import PointArray
-## Transformation tree
-from tf.msg import tfMessage
-from geometry_msgs.msg import TransformStamped
 
 class Person():
     def __init__(self):
@@ -72,18 +69,13 @@ class LockPose():
         self.camFov_horizontal = camFov_horizontal
 
         # Messages
-        self.msg_tfStamped              = TransformStamped()
-        self.msg_targetStatus           = "?" # String
-        self.msg_targetCroppedRgbTorso    = Image()
-        self.msg_targetCroppedDepthTorso  = Image()
-        self.msg_targetSkeletonImg      = Image()
         self.msg_rgbImg                 = None      # Image
         self.msg_depthImg               = None      # Image
+        self.msg_targetStatus           = "Not Detected" # String
+        self.msg_targetSkeletonImg      = Image()
         self.msg_poseLandmarks          = PointArray()
-        self.msg_targetStatus                = "?"
         self.pub_targetStatus = rospy.Publisher(
         "/utbots/vision/lock/status", String, queue_size=10)
-
 
         # To tell if there's a new msg
         self.newRgbImg = False
@@ -95,16 +87,12 @@ class LockPose():
         self.sub_depthImg = rospy.Subscriber(
             topic_depthImg, Image, self.callback_depthImg)
 
-        self.pub_tf = rospy.Publisher(
-            "/tf", tfMessage, queue_size=1)
         self.pub_targetStatus = rospy.Publisher(
-            "/utbots/vision/lock/status", String, queue_size=10)
-        self.pub_targetPoint = rospy.Publisher(
-            "/utbots/vision/lock/torsoPoint", PointStamped, queue_size=10)
+            "/utbots/vision/person/pose/status", String, queue_size=10)
         self.pub_targetSkeletonImg = rospy.Publisher(
-            "/utbots/vision/lock/skeletonImg", Image, queue_size=10)
+            "/utbots/vision/person/pose/skeletonImg", Image, queue_size=10)
         self.pub_poseLandmarks = rospy.Publisher(
-            "/utbots/vision/lock/poseLandmarks", PointArray, queue_size=10)
+            "/utbots/vision/person/pose/poseLandmarks", PointArray, queue_size=10)
 
         # ROS node
         rospy.init_node('locker_human', anonymous=True)
@@ -245,7 +233,7 @@ class LockPose():
               
 if __name__ == "__main__":
     LockPose(
-        "/utbots/vision/person",
+        "/camera/rgb/image_raw",
         "/camera/depth_registered/image_raw",
         43,
         57)
