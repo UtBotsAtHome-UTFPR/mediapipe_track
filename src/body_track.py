@@ -235,7 +235,7 @@ class LockPose():
                 self.DrawLandmarks(cv_rgbImg, poseResults)
                 self.msg_targetSkeletonImg = self.cvBridge.cv2_to_imgmsg(cv_rgbImg)
 
-                # Pose WORLD Landmarks, otherwise the data format does not represent metric real distances
+                # Pose WORLD Landmarks, otherwise t he data format does not represent metric real distances
                 if poseResults.pose_world_landmarks:
                     self.DefineBodyStructure(poseResults.pose_landmarks.landmark)    
                     self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)

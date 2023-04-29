@@ -67,7 +67,7 @@ class BodyPoints():
         # Time
         self.loopRate = rospy.Rate(30)
         self.t_last = 0.0  # sec
-        self.t_timeout = 0.250  # sec
+        self.t_timeout = 2.250  # sec
 
         # Cv
         self.cvBridge = CvBridge()
@@ -151,17 +151,18 @@ class BodyPoints():
                     torsoCenter3d = self.ExtractDepthPoint(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
                     # self.msg_targetPoint = Point(self.GetTorsoDistance(croppedDepthImg), 0, 0)
                     self.msg_targetPoint.point = torsoCenter3d
-                    self.msg_targetStatus = "Located"
+
+                    t_now = rospy.get_time()
+                    self.t_last = t_now
                 except:
                     rospy.loginfo("------------- Error in depth crop -------------")
                     return 0                
-            # Nothing detected...
-            else:
-                t_now = rospy.get_time()
-                if (t_now - self.t_last > self.t_timeout and self.msg_targetStatus != "?"):
-                    self.t_last = t_now
-                    self.msg_targetPoint.point = Point(0, 0, 0)
-                    self.msg_targetStatus = "?"
+        # Nothing detected...
+        else:
+            t_now = rospy.get_time()
+            if (t_now - self.t_last > self.t_timeout):
+                self.t_last = t_now
+                self.msg_targetPoint.point = Point(0, 0, 0)
 
         rospy.loginfo("\nTARGET")
         rospy.loginfo(" - status: {}".format(self.msg_targetStatus))
@@ -267,6 +268,6 @@ class BodyPoints():
 if __name__ == "__main__":
     BodyPoints(
         "/camera/rgb/image_raw",
-        "/camera/depth_registered/image_raw",
+        "/camera/depth/image_raw",
         43,
         57)
