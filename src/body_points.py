@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Image processing
 from cv_bridge import CvBridge
@@ -9,7 +9,7 @@ import rospy
 from std_msgs.msg import String
 from std_msgs.msg import Bool
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
-from hri_msgs.msg import Skeleton2D
+#from hri_msgs.msg import Skeleton2D
 from vision_msgs.msg import PointArray
 from sensor_msgs.msg import Image
 ## Transformation tree
@@ -254,9 +254,8 @@ class BodyPoints():
     def PublishEverything(self):
         self.pub_targetCroppedRgbTorso.publish(self.msg_targetCroppedRgbTorso)
         self.pub_targetCroppedDepthTorso.publish(self.msg_targetCroppedDepthTorso)
-        # self.pub_targetStatus.publish(self.msg_targetStatus)
         self.pub_targetPoint.publish(self.msg_targetPoint)
-        # self.SetupTfMsg(self.msg_targetPoint.point.x, self.msg_targetPoint.point.y, self.msg_targetPoint.point.z)
+        self.SetupTfMsg(self.msg_targetPoint.point.x, self.msg_targetPoint.point.y, self.msg_targetPoint.point.z)
 
 # Main
     def mainLoop(self):
