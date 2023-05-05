@@ -15,53 +15,6 @@ from geometry_msgs.msg import Point
 from sensor_msgs.msg import Image
 from vision_msgs.msg import PointArray
 
-class Person():
-    def __init__(self):
-        self.existsID = False
-
-        # Body parts objects
-        self.shoulder = BodyPart("shoulder")
-        self.hip = BodyPart("hip")
-        self.torsoHeight = BodyPart("torso")
-        self.rightLeg = BodyPart("right_leg")
-        self.leftLeg = BodyPart("left_leg")
-        self.rightArm = BodyPart("right_arm")
-        self.leftArm = BodyPart("left_arm")
-
-        # Body parts list
-        self.bodyParts = [self.shoulder, self.hip, self.rightLeg, self.leftLeg, self.rightArm, self.leftArm]
-
-        # Body visibility flag
-        self.bodyVisible = False
-
-    def ChkBodyVisib(self):
-        for limb in self.bodyParts:
-            if(limb.isVisible == False):
-                rospy.loginfo(limb.name + " not visible")
-                self.bodyVisible = False
-                return False
-        self.bodyVisible = True
-        return True
-
-class BodyPart():
-    def __init__(self, name):
-        self.name = name
-
-        self.landmarks_list = None
-        self.MIN_VISIBILITY = 0.5
-        self.isVisible = False
-
-    def SetLandmarkList(self, lmark_list):
-        self.landmarks_list = lmark_list
-        self.isVisible = self.ChkVisib(lmark_list)
-
-    def ChkVisib(self, lmark_list):
-        for i in range(len(lmark_list)):
-            if lmark_list[i].visibility < self.MIN_VISIBILITY:
-                # rospy.loginfo("WARN: Points not visible")
-                return False
-        return True
-
 class LockPose():
     def __init__(self, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
         # Image FOV for trig calculations
@@ -231,6 +184,53 @@ class LockPose():
                 else:
                     self.msg_targetStatus = "Not Detected"
               
+class Person():
+    def __init__(self):
+        self.existsID = False
+
+        # Body parts objects
+        self.shoulder = BodyPart("shoulder")
+        self.hip = BodyPart("hip")
+        self.torsoHeight = BodyPart("torso")
+        self.rightLeg = BodyPart("right_leg")
+        self.leftLeg = BodyPart("left_leg")
+        self.rightArm = BodyPart("right_arm")
+        self.leftArm = BodyPart("left_arm")
+
+        # Body parts list
+        self.bodyParts = [self.shoulder, self.hip, self.rightLeg, self.leftLeg, self.rightArm, self.leftArm]
+
+        # Body visibility flag
+        self.bodyVisible = False
+
+    def ChkBodyVisib(self):
+        for limb in self.bodyParts:
+            if(limb.isVisible == False):
+                rospy.loginfo(limb.name + " not visible")
+                self.bodyVisible = False
+                return False
+        self.bodyVisible = True
+        return True
+
+class BodyPart():
+    def __init__(self, name):
+        self.name = name
+
+        self.landmarks_list = None
+        self.MIN_VISIBILITY = 0.5
+        self.isVisible = False
+
+    def SetLandmarkList(self, lmark_list):
+        self.landmarks_list = lmark_list
+        self.isVisible = self.ChkVisib(lmark_list)
+
+    def ChkVisib(self, lmark_list):
+        for i in range(len(lmark_list)):
+            if lmark_list[i].visibility < self.MIN_VISIBILITY:
+                # rospy.loginfo("WARN: Points not visible")
+                return False
+        return True
+    
 if __name__ == "__main__":
     LockPose(
         "/camera/rgb/image_raw",
