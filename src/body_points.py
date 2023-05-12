@@ -146,10 +146,7 @@ class BodyPoints():
                 try:
                     croppedDepthImg = self.CropTorsoImg(cv_depthImg, "32FC1", torsoPoints, torsoCenter)
                     self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
-                    # torsoCenter3d = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-                    # torsoCenter3d = self.XyzToZxy(torsoCenter3d)
                     torsoCenter3d = self.ExtractDepthPoint(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-                    # self.msg_targetPoint = Point(self.GetTorsoDistance(croppedDepthImg), 0, 0)
                     self.msg_targetPoint.point = torsoCenter3d
 
                     t_now = rospy.get_time()
@@ -186,43 +183,39 @@ class BodyPoints():
 
     ''' By using rule of three and considering the FOV of the camera:
             - Calculates the 3D point of a depth pixel '''
-    def Get3dPointFromDepthPixel(self, pixelPoint, depth):
-
+    def Get3dPointFromDepthPixel(self, pixelPoint, pointRadius):
         # Constants
+        # -- Half angle for each quadrant
         maxAngle_x = self.camFov_horizontal/2
         maxAngle_y = self.camFov_vertical/2
-        screenMax_x = 1.0
-        screenMax_y = 1.0
-        screenCenter_x = screenMax_x / 2.0
-        screenCenter_y = screenMax_y / 2.0
+        # -- Screen dimensions are adjusted to 0-1 in X and Y
+        CENTER_X = 1/2.0
+        CENTER_Y = 1/2.0
+
+        rospy.loginfo(pixelPoint.x)
+        rospy.loginfo(pixelPoint.y)
 
         # Distances to screen center
-        distanceToCenter_x = pixelPoint.x - screenCenter_x
-        distanceToCenter_y = pixelPoint.y - screenCenter_y
+        distanceToCenter_x = pixelPoint.x - CENTER_X
+        distanceToCenter_y = pixelPoint.y - CENTER_Y
 
         # Horizontal angle (xz plane)
-        xz_angle_deg = maxAngle_x * distanceToCenter_x / screenCenter_x
-        xz_angle_rad = radians(xz_angle_deg)
+        theta = radians(maxAngle_x * distanceToCenter_x / CENTER_X)
         
         # Vertical angle (yz plane)
-        yz_angle_deg = maxAngle_y * distanceToCenter_y / screenCenter_y
-        yz_angle_rad = radians(yz_angle_deg)
+        phi = radians(maxAngle_y * distanceToCenter_y / CENTER_Y)
 
         # Coordinates
-        num = depth / 1000
-        denom = sqrt(1 + pow(tan(xz_angle_rad), 2) + pow(tan(yz_angle_rad), 2))
-        z = (num / denom)
-        x = z * tan(xz_angle_rad)
-        y = z * tan(yz_angle_rad)
+        # -- mm to m  conversion 
+        pointRadius = pointRadius / 1000 
+
+        z = pointRadius/ sqrt(1 + pow(tan(theta), 2) + pow(tan(phi), 2))
+        x = z * tan(theta)
+        y = z * tan(phi)
 
         # Corrections
         x = -x
         y = -y
-
-        # print("depth: {}".format(depth))
-        # print("distancesToCenter: ({}, {})".format(distanceToCenter_x, distanceToCenter_y))
-        # print("angles: ({}, {})".format(xz_angle_deg, yz_angle_deg))
-        # print("xyz: ({}, {}, {})".format(x, y, z))
 
         return Point(x, y, z)
 
@@ -230,8 +223,8 @@ class BodyPoints():
     def XyzToZxy(self, point):
         return Point(point.z, point.x, point.y)   
 
-    def ExtractDepthPoint(self, coordinate, depth_frame):
-        depthPoint = self.Get3dPointFromDepthPixel(coordinate, depth_frame)
+    def ExtractDepthPoint(self, coordinate, mean_dist):
+        depthPoint = self.Get3dPointFromDepthPixel(coordinate, mean_dist)
         return self.XyzToZxy(depthPoint)
 
 # Transformation tree methods
