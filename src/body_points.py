@@ -17,7 +17,7 @@ from tf.msg import tfMessage
 from geometry_msgs.msg import TransformStamped
 # Math 
 import numpy as np
-from math import pow, sqrt, tan, radians
+from math import pow, sqrt, sin, cos, tan, radians
 
 class BodyPoints():
     def __init__(self, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
@@ -186,38 +186,43 @@ class BodyPoints():
 
     ''' By using rule of three and considering the FOV of the camera:
             - Calculates the 3D point of a depth pixel '''
-    def Get3dPointFromDepthPixel(self, pixelPoint, depth):
+    def Get3dPointFromDepthPixel(self, pixel, distance):
+        # The height and width are already scaled to 0-1 both by Mediapipe
+        width  = 1.0
+        height = 1.0
 
-        # Constants
-        maxAngle_x = self.camFov_horizontal/2
-        maxAngle_y = self.camFov_vertical/2
-        screenMax_x = 1.0
-        screenMax_y = 1.0
-        screenCenter_x = screenMax_x / 2.0
-        screenCenter_y = screenMax_y / 2.0
+        # Centralize the camera reference at (0,0,0)
+        ## (x,y,z) are respectively horizontal, vertical and depth
+        ## Theta is the angle of the point with z axis in the zx plane
+        ## Phi is the angle of the point with z axis in the zy plane
+        ## x_max is the distance of the side border from the camera
+        ## y_max is the distance of the upper border from the camera
+        theta_max = self.camFov_horizontal/2 
+        phi_max = self.camFov_vertical/2
+        x_max = width/2.0
+        y_max = height/2.0
+        x = pixel.x - x_max
+        y = pixel.y - y_max
 
-        # Distances to screen center
-        distanceToCenter_x = pixelPoint.x - screenCenter_x
-        distanceToCenter_y = pixelPoint.y - screenCenter_y
+        # Caculate point theta and phi
+        theta = radians(theta_max * x / x_max)
+        phi = radians(phi_max * y / y_max)
 
-        # Horizontal angle (xz plane)
-        xz_angle_deg = maxAngle_x * distanceToCenter_x / screenCenter_x
-        xz_angle_rad = radians(xz_angle_deg)
-        
-        # Vertical angle (yz plane)
-        yz_angle_deg = maxAngle_y * distanceToCenter_y / screenCenter_y
-        yz_angle_rad = radians(yz_angle_deg)
+        # Convert the spherical radius rho from Kinect's mm to meter
+        rho = distance/1000
 
-        # Coordinates
-        num = depth / 1000
-        denom = sqrt(1 + pow(tan(xz_angle_rad), 2) + pow(tan(yz_angle_rad), 2))
-        z = (num / denom)
-        x = z * tan(xz_angle_rad)
-        y = z * tan(yz_angle_rad)
+        # Calculate x, y and z
+        y = rho * sin(phi)
+        x = sqrt(pow(rho, 2) - pow(y, 2)) * sin(theta)
+        z = x / tan(theta)
 
-        # Corrections
-        x = -x
-        y = -y
+        # z = (rho / sqrt(1 + pow(tan(theta), 2) + pow(tan(phi), 2)))
+        # x = z * tan(theta)
+        # y = z * tan(phi)
+
+        # # Corrections
+        # x = -x
+        # y = -y
 
         # print("depth: {}".format(depth))
         # print("distancesToCenter: ({}, {})".format(distanceToCenter_x, distanceToCenter_y))
