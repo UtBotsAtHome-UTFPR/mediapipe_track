@@ -146,10 +146,7 @@ class BodyPoints():
                 try:
                     croppedDepthImg = self.CropTorsoImg(cv_depthImg, "32FC1", torsoPoints, torsoCenter)
                     self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
-                    # torsoCenter3d = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-                    # torsoCenter3d = self.XyzToZxy(torsoCenter3d)
                     torsoCenter3d = self.ExtractDepthPoint(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-                    # self.msg_targetPoint = Point(self.GetTorsoDistance(croppedDepthImg), 0, 0)
                     self.msg_targetPoint.point = torsoCenter3d
 
                     t_now = rospy.get_time()
@@ -224,19 +221,14 @@ class BodyPoints():
         # x = -x
         # y = -y
 
-        # print("depth: {}".format(depth))
-        # print("distancesToCenter: ({}, {})".format(distanceToCenter_x, distanceToCenter_y))
-        # print("angles: ({}, {})".format(xz_angle_deg, yz_angle_deg))
-        # print("xyz: ({}, {}, {})".format(x, y, z))
-
         return Point(x, y, z)
 
     ''' Transforms the mpipe coordinate format to tf tree coordinate format'''
     def XyzToZxy(self, point):
         return Point(point.z, point.x, point.y)   
 
-    def ExtractDepthPoint(self, coordinate, depth_frame):
-        depthPoint = self.Get3dPointFromDepthPixel(coordinate, depth_frame)
+    def ExtractDepthPoint(self, coordinate, mean_dist):
+        depthPoint = self.Get3dPointFromDepthPixel(coordinate, mean_dist)
         return self.XyzToZxy(depthPoint)
 
 # Transformation tree methods
