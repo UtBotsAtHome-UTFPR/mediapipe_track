@@ -213,15 +213,12 @@ class BodyPoints():
         x = sqrt(pow(rho, 2) - pow(y, 2)) * sin(theta)
         z = x / tan(theta)
 
-        # z = (rho / sqrt(1 + pow(tan(theta), 2) + pow(tan(phi), 2)))
-        # x = z * tan(theta)
-        # y = z * tan(phi)
+        # Change coordinate scheme
+        ## We calculate with (x,y,z) respectively horizontal, vertical and depth
+        ## For the plot in 3d space, we need to remap the coordinates to (z, -x, -y)
+        point_zxy = Point(z, -x, -y)
 
-        # # Corrections
-        # x = -x
-        # y = -y
-
-        return Point(x, y, z)
+        return point_zxy
 
     ''' Transforms the mpipe coordinate format to tf tree coordinate format'''
     def XyzToZxy(self, point):
