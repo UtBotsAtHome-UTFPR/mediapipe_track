@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# ROS implementation of the Mediapipe Pose solution up to the 2022 libraries
+# Inputs the sensor_msgs/Image message to feed the landmarks processing, outputs the skeletonImage, the detection status and the landmarks list
+
 # Mediapipe imports
 import cv2
 import mediapipe as mp
@@ -15,7 +18,7 @@ from geometry_msgs.msg import Point
 from sensor_msgs.msg import Image
 from vision_msgs.msg import PointArray
 
-class LockPose():
+class BodyPose():
     def __init__(self, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
         # Image FOV for trig calculations
         self.camFov_vertical = camFov_vertical
@@ -27,8 +30,6 @@ class LockPose():
         self.msg_targetStatus           = "Not Detected" # String
         self.msg_targetSkeletonImg      = Image()
         self.msg_poseLandmarks          = PointArray()
-        self.pub_targetStatus = rospy.Publisher(
-        "/utbots/vision/lock/status", String, queue_size=10)
 
         # To tell if there's a new msg
         self.newRgbImg = False
@@ -48,7 +49,7 @@ class LockPose():
             "/utbots/vision/person/pose/poseLandmarks", PointArray, queue_size=10)
 
         # ROS node
-        rospy.init_node('locker_human', anonymous=True)
+        rospy.init_node('body_pose', anonymous=True)
 
         # Time
         self.loopRate = rospy.Rate(30)
@@ -117,7 +118,6 @@ class LockPose():
             landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style())
 
 # Body data processing
-## Limbs distances
     def DefineBodyStructure(self, landmark):
         # Evaluated landmark points
         ## Elbows
@@ -176,7 +176,7 @@ class LockPose():
                 self.DrawLandmarks(cv_rgbImg, poseResults)
                 self.msg_targetSkeletonImg = self.cvBridge.cv2_to_imgmsg(cv_rgbImg)
 
-                # Pose WORLD Landmarks, otherwise t he data format does not represent metric real distances
+                # Pose WORLD Landmarks, otherwise the data format does not represent metric real distances
                 if poseResults.pose_world_landmarks:
                     self.DefineBodyStructure(poseResults.pose_landmarks.landmark)    
                     self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
@@ -232,7 +232,7 @@ class BodyPart():
         return True
     
 if __name__ == "__main__":
-    LockPose(
+    BodyPose(
         "/camera/rgb/image_raw",
         "/camera/depth_registered/image_raw",
         43,
