@@ -53,8 +53,6 @@ class BodyPose():
 
         # Time
         self.loopRate = rospy.Rate(30)
-        self.t_last = 0.0  # sec
-        self.t_timeout = 0.250  # sec
 
         # Cv
         self.cvBridge = CvBridge()

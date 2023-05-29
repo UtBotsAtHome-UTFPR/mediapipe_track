@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# Through MP Pose landmarks and RGB-D images estimates a 3d point (geometry_msgs/PointStamped) for the detected person from the camera reference 
+
 # Image processing
 from cv_bridge import CvBridge
 
@@ -9,12 +11,12 @@ import rospy
 from std_msgs.msg import String
 from std_msgs.msg import Bool
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
-#from hri_msgs.msg import Skeleton2D
-from vision_msgs.msg import PointArray
+from vision_msgs.msg import Skeleton2d
 from sensor_msgs.msg import Image
 ## Transformation tree
 from tf.msg import tfMessage
 from geometry_msgs.msg import TransformStamped
+
 # Math 
 import numpy as np
 from math import pow, sqrt, sin, cos, tan, radians
@@ -31,9 +33,9 @@ class BodyPoints():
         self.msg_targetPoint.header.frame_id = "target"
         self.msg_targetCroppedRgbTorso       = Image()
         self.msg_targetCroppedDepthTorso     = Image()
-        self.msg_rgbImg                      = None      # Image
-        self.msg_depthImg                    = None      # Image
-        self.msg_poseLandmarks               = PointArray()
+        self.msg_rgbImg                      = None             # Image
+        self.msg_depthImg                    = None             # Image
+        self.msg_poseLandmarks               = Skeleton2d()
 
         # To tell if there's a new msg
         self.newRgbImg = False
@@ -46,7 +48,7 @@ class BodyPoints():
         self.sub_depthImg = rospy.Subscriber(
             topic_depthImg, Image, self.callback_depthImg)
         self.sub_poseLandmarks = rospy.Subscriber(
-            "/utbots/vision/person/pose/poseLandmarks", PointArray, self.callback_poseLandmarks)
+            "/utbots/vision/person/pose/poseLandmarks", Skeleton2d, self.callback_poseLandmarks)
         self.sub_targetStatus = rospy.Subscriber(
             "/utbots/vision/person/pose/status", String, self.callback_targetStatus)
 
@@ -58,8 +60,6 @@ class BodyPoints():
             "/utbots/vision/person/selected/croppedTorso/rgb", Image, queue_size=10)
         self.pub_targetCroppedDepthTorso = rospy.Publisher(
             "/utbots/vision/person/selected/croppedTorso/depth", Image, queue_size=10)
-        # self.pub_targetStatus = rospy.Publisher(
-        #     "/utbots/vision/lock/status", String, queue_size=10)
 
         # ROS node
         rospy.init_node('body_points', anonymous=True)
@@ -77,12 +77,10 @@ class BodyPoints():
     def callback_rgbImg(self, msg):
         self.msg_rgbImg = msg
         self.newRgbImg = True
-        # print("- RGB: new msg")
 
     def callback_depthImg(self, msg):
         self.msg_depthImg = msg
         self.newDepthImg = True
-        # print("- Depth: new msg")
     
     def callback_poseLandmarks(self, msg):
         self.msg_poseLandmarks = msg
@@ -93,7 +91,10 @@ class BodyPoints():
 
 ## Torso
     def GetTorsoPoints(self, landmarks):
-        return [landmarks[12], landmarks[11], landmarks[24], landmarks[23]]
+        return [landmarks[msg_poseLandmarks.RIGHT_SHOULDER], 
+                landmarks[msg_poseLandmarks.LEFT_SHOULDER], 
+                landmarks[msg_poseLandmarks.RIGHT_HIP], 
+                landmarks[msg_poseLandmarks.LEFT_HIP]]
 
     def CropTorsoImg(self, img, imgEncoding, torsoPoints, torsoCenter):
         if imgEncoding == "32FC1":
@@ -181,8 +182,7 @@ class BodyPoints():
             counter = counter + 1
         return Point(sum_x/counter, sum_y/counter, sum_z/counter)
 
-    ''' By using rule of three and considering the FOV of the camera:
-            - Calculates the 3D point of a depth pixel '''
+# Calculates the 3D point of a depth pixel by using rule of three and considering the FOV of the camera:
     def Get3dPointFromDepthPixel(self, pixel, distance):
         # The height and width are already scaled to 0-1 both by Mediapipe
         width  = 1.0
@@ -220,10 +220,6 @@ class BodyPoints():
 
         return point_zxy
 
-    ''' Transforms the mpipe coordinate format to tf tree coordinate format'''
-    def XyzToZxy(self, point):
-        return Point(point.z, point.x, point.y)   
-
     def ExtractDepthPoint(self, coordinate, mean_dist):
         depthPoint = self.Get3dPointFromDepthPixel(coordinate, mean_dist)
         return self.XyzToZxy(depthPoint)
@@ -255,8 +251,8 @@ class BodyPoints():
     def mainLoop(self):
         while rospy.is_shutdown() == False:
             self.loopRate.sleep()
-            self.PublishEverything()
             self.ProcessTorso()
+            self.PublishEverything()
               
 if __name__ == "__main__":
     BodyPoints(
