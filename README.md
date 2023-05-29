@@ -10,7 +10,7 @@
     - **Building**
         ```
         cd catkin_ws/src
-        git clone https://github.com/UtBot-UTFPR/mediapipe_track.git
+        git clone https://github.com/UtBotsAtHome-UTFPR/mediapipe_track.git
         cd ..
         catkin_make
         ```
