@@ -36,7 +36,8 @@
         - You should **only use Mediapipe with the virtual Python executable**
             ```bash
             source venv/bin/activate # Enter virtual env
-            python locker_human.py   # Instead of "rosrun mediapipe_track locker_human.py"
+            python body_pose.py   # Instead of "rosrun mediapipe_track body_pose.py"
+            python body_points.py # Instead of "rosrun mediapipe_track body_points.py"
             ```
 
 #### Running
