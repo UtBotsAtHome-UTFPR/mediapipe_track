@@ -16,7 +16,7 @@ import rospy
 from std_msgs.msg import String
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import Image
-from vision_msgs.msg import PointArray
+from vision_msgs.msg import Skeleton2d
 
 class BodyPose():
     def __init__(self, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
@@ -29,7 +29,7 @@ class BodyPose():
         self.msg_depthImg               = None      # Image
         self.msg_targetStatus           = "Not Detected" # String
         self.msg_targetSkeletonImg      = Image()
-        self.msg_poseLandmarks          = PointArray()
+        self.msg_poseLandmarks          = Skeleton2d()
 
         # To tell if there's a new msg
         self.newRgbImg = False
@@ -46,7 +46,7 @@ class BodyPose():
         self.pub_targetSkeletonImg = rospy.Publisher(
             "/utbots/vision/person/pose/skeletonImg", Image, queue_size=10)
         self.pub_poseLandmarks = rospy.Publisher(
-            "/utbots/vision/person/pose/poseLandmarks", PointArray, queue_size=10)
+            "/utbots/vision/person/pose/poseLandmarks", Skeleton2d, queue_size=10)
 
         # ROS node
         rospy.init_node('body_pose', anonymous=True)
@@ -80,12 +80,10 @@ class BodyPose():
     def callback_rgbImg(self, msg):
         self.msg_rgbImg = msg
         self.newRgbImg = True
-        # print("- RGB: new msg")
 
     def callback_depthImg(self, msg):
         self.msg_depthImg = msg
         self.newDepthImg = True
-        # print("- Depth: new msg")
     
 # Basic MediaPipe Pose methods
     def ProcessImg(self):
@@ -107,7 +105,6 @@ class BodyPose():
         # Back to BGR
         cvImg = cv2.cvtColor(cvImg, cv2.COLOR_RGB2BGR)
 
-        # Returns
         return cvImg, poseResults
 
     def DrawLandmarks(self, cv_rgbImg, poseResults):
@@ -118,35 +115,6 @@ class BodyPose():
             landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style())
 
 # Body data processing
-    def DefineBodyStructure(self, landmark):
-        # Evaluated landmark points
-        ## Elbows
-        rElbow = landmark[self.mp_pose.PoseLandmark.RIGHT_ELBOW]
-        lElbow = landmark[self.mp_pose.PoseLandmark.LEFT_ELBOW] 
-        ## Wrists
-        rWrist = landmark[self.mp_pose.PoseLandmark.RIGHT_WRIST]
-        lWrist = landmark[self.mp_pose.PoseLandmark.LEFT_WRIST] 
-        ## Hip
-        rHip = landmark[self.mp_pose.PoseLandmark.RIGHT_HIP]
-        lHip = landmark[self.mp_pose.PoseLandmark.LEFT_HIP] 
-        ## Shoulder
-        rShoulder = landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER]
-        lShoulder = landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER]
-        ## Knees
-        rKnee = landmark[self.mp_pose.PoseLandmark.RIGHT_KNEE]
-        lKnee = landmark[self.mp_pose.PoseLandmark.LEFT_KNEE]
-        ## Ankles
-        rAnkle = landmark[self.mp_pose.PoseLandmark.RIGHT_ANKLE]
-        lAnkle = landmark[self.mp_pose.PoseLandmark.LEFT_ANKLE]
-
-        self.trackedBody.shoulder.SetLandmarkList([lShoulder, rShoulder])
-        self.trackedBody.hip.SetLandmarkList([lHip, rHip])
-        self.trackedBody.torsoHeight.SetLandmarkList([lHip, rHip, lShoulder, rShoulder])
-        self.trackedBody.rightLeg.SetLandmarkList([rHip, rKnee, rAnkle])
-        self.trackedBody.leftLeg.SetLandmarkList([lHip, lKnee, lAnkle])
-        self.trackedBody.rightArm.SetLandmarkList([rShoulder, rElbow, rWrist])
-        self.trackedBody.leftArm.SetLandmarkList([lShoulder, lElbow, lWrist])
-
     def SetLandmarkPoints(self, landmark):
         landmarks = []
         for lmark in self.mp_pose.PoseLandmark:
@@ -158,7 +126,6 @@ class BodyPose():
 
 # Nodes Publish
     def PublishEverything(self):
-        self.pub_targetStatus.publish(self.msg_targetStatus)
         self.pub_targetSkeletonImg.publish(self.msg_targetSkeletonImg)
         self.pub_poseLandmarks.publish(self.msg_poseLandmarks)
         self.pub_targetStatus.publish(self.msg_targetStatus)
@@ -167,69 +134,28 @@ class BodyPose():
     def mainLoop(self):
         while rospy.is_shutdown() == False:
             self.loopRate.sleep()
-            self.PublishEverything()
 
+            # Gathers new landmark information only if there is a new image
             if self.newRgbImg == True:
                 self.newRgbImg = False
 
+                # Process the results
                 cv_rgbImg, poseResults = self.ProcessImg()
+
+                # Draws the skeleton image
                 self.DrawLandmarks(cv_rgbImg, poseResults)
                 self.msg_targetSkeletonImg = self.cvBridge.cv2_to_imgmsg(cv_rgbImg)
 
-                # Pose WORLD Landmarks, otherwise the data format does not represent metric real distances
+                # Processes pose results 
+                # Results are Pose WORLD Landmarks, otherwise the data format does not represent metric real distances
                 if poseResults.pose_world_landmarks:
                     self.DefineBodyStructure(poseResults.pose_landmarks.landmark)    
                     self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
                     self.msg_targetStatus = "Detected"
                 else:
                     self.msg_targetStatus = "Not Detected"
-              
-class Person():
-    def __init__(self):
-        self.existsID = False
 
-        # Body parts objects
-        self.shoulder = BodyPart("shoulder")
-        self.hip = BodyPart("hip")
-        self.torsoHeight = BodyPart("torso")
-        self.rightLeg = BodyPart("right_leg")
-        self.leftLeg = BodyPart("left_leg")
-        self.rightArm = BodyPart("right_arm")
-        self.leftArm = BodyPart("left_arm")
-
-        # Body parts list
-        self.bodyParts = [self.shoulder, self.hip, self.rightLeg, self.leftLeg, self.rightArm, self.leftArm]
-
-        # Body visibility flag
-        self.bodyVisible = False
-
-    def ChkBodyVisib(self):
-        for limb in self.bodyParts:
-            if(limb.isVisible == False):
-                rospy.loginfo(limb.name + " not visible")
-                self.bodyVisible = False
-                return False
-        self.bodyVisible = True
-        return True
-
-class BodyPart():
-    def __init__(self, name):
-        self.name = name
-
-        self.landmarks_list = None
-        self.MIN_VISIBILITY = 0.5
-        self.isVisible = False
-
-    def SetLandmarkList(self, lmark_list):
-        self.landmarks_list = lmark_list
-        self.isVisible = self.ChkVisib(lmark_list)
-
-    def ChkVisib(self, lmark_list):
-        for i in range(len(lmark_list)):
-            if lmark_list[i].visibility < self.MIN_VISIBILITY:
-                # rospy.loginfo("WARN: Points not visible")
-                return False
-        return True
+            self.PublishEverything()
     
 if __name__ == "__main__":
     BodyPose(
