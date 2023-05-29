@@ -1,0 +1,5 @@
+<launch>
+
+    <node pkg="mediapipe_track" type="body_track.py" name="body_track" output="screen"/>
+
+</launch>

@@ -41,17 +41,17 @@
 
 #### Running
 
-- First, run freenect::
+- First, run freenect:
     ```
     roslaunch mediapipe_track freenect.launch
     ```
-- Then, to run the Mediapipe pose tracking
+- Then, to run the Mediapipe pose estimation and 3d points positions:
     ```
-    roslaunch mediapipe_track body_track.py
+    roslaunch mediapipe_track body_pose_and_points.launch
     ```
-- To gather the 3d position of the person, run also:
+- To run only the Mediapipe pose estimation:
     ```
-    rosrun mediapipe_track body_points.py
+    rosrun mediapipe_track body_pose.py
 
 - To view the 3D map with the published 3D point referred as the person detected position, run Rviz with
     ```
