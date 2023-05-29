@@ -62,9 +62,6 @@ class BodyPose():
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.mp_pose = mp.solutions.pose
 
-        # Person
-        self.trackedBody = Person()
-
         # Calls main loop
         self.pose = self.mp_pose.Pose(
             # Pose Configurations
@@ -146,8 +143,7 @@ class BodyPose():
 
                 # Processes pose results 
                 # Results are Pose WORLD Landmarks, otherwise the data format does not represent metric real distances
-                if poseResults.pose_world_landmarks:
-                    self.DefineBodyStructure(poseResults.pose_landmarks.landmark)    
+                if poseResults.pose_world_landmarks:  
                     self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
                     self.msg_targetStatus = "Detected"
                 else:

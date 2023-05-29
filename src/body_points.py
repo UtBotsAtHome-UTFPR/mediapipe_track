@@ -29,6 +29,7 @@ class BodyPoints():
 
         # Messages
         self.msg_tfStamped                   = TransformStamped()
+        self.msg_targetStatus                = "Not Detected"
         self.msg_targetPoint                 = PointStamped()   # Point
         self.msg_targetPoint.header.frame_id = "target"
         self.msg_targetCroppedRgbTorso       = Image()
@@ -93,33 +94,32 @@ class BodyPoints():
 
     def CalculateTorsoCenter(self):
         # Gets the torso points coordinates
-        right_shoulder = msg_poseLandmarks.points[msg_poseLandmarks.RIGHT_SHOULDER]
-        left_shoulder  = msg_poseLandmarks.points[msg_poseLandmarks.LEFT_SHOULDER]
-        right_hip      = msg_poseLandmarks.points[msg_poseLandmarks.RIGHT_HIP]
-        left_hip       = msg_poseLandmarks.points[msg_poseLandmarks.LEFT_HIP]
+        right_shoulder = self.msg_poseLandmarks.points[self.msg_poseLandmarks.RIGHT_SHOULDER]
+        left_shoulder  = self.msg_poseLandmarks.points[self.msg_poseLandmarks.LEFT_SHOULDER]
+        right_hip      = self.msg_poseLandmarks.points[self.msg_poseLandmarks.RIGHT_HIP]
+        left_hip       = self.msg_poseLandmarks.points[self.msg_poseLandmarks.LEFT_HIP]
 
         # Calculates the torso center point
-        torsoCenter = Point
-                        (
+        torsoCenter = Point(
                          (right_shoulder.x + left_shoulder.x + right_hip.x + left_hip.x)/4,
                          (right_shoulder.y + left_shoulder.y + right_hip.y + left_hip.y)/4,
                          (right_shoulder.z + left_shoulder.z + right_hip.z + left_hip.z)/4
-                        )
+                      )
         return torsoCenter
 
-    def CropTorsoImg(self, img, torsoCenter):
+    def CropTorsoImg(self, img, img_encoding, torsoCenter):
         # Gets the torso points coordinates
-        right_shoulder = msg_poseLandmarks.points[msg_poseLandmarks.RIGHT_SHOULDER]
-        left_shoulder  = msg_poseLandmarks.points[msg_poseLandmarks.LEFT_SHOULDER]
-        right_hip      = msg_poseLandmarks.points[msg_poseLandmarks.RIGHT_HIP]
-            
+        right_shoulder = self.msg_poseLandmarks.points[self.msg_poseLandmarks.RIGHT_SHOULDER]
+        left_shoulder  = self.msg_poseLandmarks.points[self.msg_poseLandmarks.LEFT_SHOULDER]
+        right_hip      = self.msg_poseLandmarks.points[self.msg_poseLandmarks.RIGHT_HIP]
+ 
         # Gets the image dimensions
         ## Depth image (32FC1) gives two dimensions
-        if img.encoding == "32FC1":
+        if img_encoding == "32FC1":
             imageHeight, imageWidth = img.shape
         ## RGB image gives three dimensions (the third is color channel)
         else:
-            imageHeight, imageWidth, _ = img.shape
+            imageHeight, imageWidth, a = img.shape
 
         # Calculates the torso width and height
         torsoWidth = max(abs(right_shoulder.x - left_shoulder.x) * imageWidth, 1)
@@ -146,64 +146,6 @@ class BodyPoints():
 
         depthMean = np.mean(rowMeans)
         return depthMean
-
-    def ProcessTorso(self):
-        
-        if self.newPoseLandmarks == True and self.msg_targetStatus.data == "Detected":
-            self.newPoseLandmarks = False
-
-            # Calculate torso center point
-            torsoCenter = self.CalculateTorsoCenter()
-
-            if self.newRgbImg == True:
-                self.newRgbImg = False
-
-                # Converts the rgb image to OpenCV format, so it can be manipulated (bgr8 encoding)
-                cv_rbgImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, "bgr8")
-
-                # Try to crop the rgb torso image
-                try:
-                    croppedRgbImg = self.CropTorsoImg(cv_rbgImg, torsoCenter)
-                    self.msg_targetCroppedRgbTorso = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
-                except:
-                    rospy.loginfo("------------- Error in RGB crop -------------")
-                    return 0
-
-            if self.newDepthImg == True:
-                self.newDepthImg = False
-
-                # Converts the rgb image to OpenCV format, so it can be manipulated (32FC1 depth encoding)
-                cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, "32FC1")
-
-                # Try to crop the depth torso image and calculate 3d torso point
-                try:
-                    croppedDepthImg = self.CropTorsoImg(cv_depthImg, torsoCenter)
-                    self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
-                    self.msg_targetPoint.point = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
-
-                    # Point creation timestamp
-                    t_now = rospy.get_time()
-                    self.t_last = t_now
-                except:
-                    rospy.loginfo("------------- Error in depth crop -------------")
-                    return 0               
-
-        # Nothing detected
-        else:
-            t_now = rospy.get_time()
-            # Evaluates time interval from the last detected person point calculated
-            # Sets the point values to origin if the interval is bigger than the defined timeout
-            if (t_now - self.t_last > self.t_timeout):
-                self.t_last = t_now
-                self.msg_targetPoint.point = Point(0, 0, 0)
-
-        # Console logs
-        rospy.loginfo("\nTARGET")
-        rospy.loginfo(" - status: {}".format(self.msg_targetStatus))s
-        rospy.loginfo(" - xyz: ({}, {}, {})".format(
-            self.msg_targetPoint.point.x, 
-            self.msg_targetPoint.point.y, 
-            self.msg_targetPoint.point.z))
 
 # Calculates the 3D point of a depth pixel by using rule of three and considering the FOV of the camera:
     def Get3dPointFromDepthPixel(self, pixel, distance):
@@ -270,7 +212,65 @@ class BodyPoints():
     def mainLoop(self):
         while rospy.is_shutdown() == False:
             self.loopRate.sleep()
-            self.ProcessTorso()
+        
+            if self.newPoseLandmarks == True and self.msg_targetStatus.data == "Detected":
+                self.newPoseLandmarks = False
+
+                # Calculate torso center point
+                torsoCenter = self.CalculateTorsoCenter()
+
+                if self.newRgbImg == True:
+                    self.newRgbImg = False
+
+                    rgb_img_encoding = "bgr8"
+                    # Converts the rgb image to OpenCV format, so it can be manipulated (bgr8 encoding)
+                    cv_rbgImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, rgb_img_encoding)
+
+                    # Try to crop the rgb torso image
+                    try:
+                        croppedRgbImg = self.CropTorsoImg(cv_rbgImg, rgb_img_encoding, torsoCenter)
+                        self.msg_targetCroppedRgbTorso = self.cvBridge.cv2_to_imgmsg(croppedRgbImg)
+                    except:
+                        rospy.loginfo("------------- Error in RGB crop -------------")
+                        # return 0
+
+                if self.newDepthImg == True:
+                    self.newDepthImg = False
+
+                    # Converts the rgb image to OpenCV format, so it can be manipulated (32FC1 depth encoding)
+                    depth_img_encoding = "32FC1"
+                    cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, depth_img_encoding)
+
+                    # Try to crop the depth torso image and calculate 3d torso point
+                    try:
+                        croppedDepthImg = self.CropTorsoImg(cv_depthImg, depth_img_encoding, torsoCenter)
+                        self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
+                        self.msg_targetPoint.point = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
+
+                        # Point creation timestamp
+                        t_now = rospy.get_time()
+                        self.t_last = t_now
+                    except:
+                        rospy.loginfo("------------- Error in depth crop -------------")
+                        # return 0               
+
+            # Nothing detected
+            else:
+                t_now = rospy.get_time()
+                # Evaluates time interval from the last detected person point calculated
+                # Sets the point values to origin if the interval is bigger than the defined timeout
+                if (t_now - self.t_last > self.t_timeout):
+                    self.t_last = t_now
+                    self.msg_targetPoint.point = Point(0, 0, 0)
+
+            # Console logs
+            rospy.loginfo("\nTARGET")
+            rospy.loginfo(" - status: {}".format(self.msg_targetStatus))
+            rospy.loginfo(" - xyz: ({}, {}, {})".format(
+                self.msg_targetPoint.point.x, 
+                self.msg_targetPoint.point.y, 
+                self.msg_targetPoint.point.z))
+
             self.PublishEverything()
               
 if __name__ == "__main__":
