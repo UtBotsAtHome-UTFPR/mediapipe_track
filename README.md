@@ -52,7 +52,7 @@
 - To run only the Mediapipe pose estimation:
     ```
     rosrun mediapipe_track body_pose.py
-
+    ```
 - To view the 3D map with the published 3D point referred as the person detected position, run Rviz with
     ```
     roslaunch mediapipe_track rviz.launch
