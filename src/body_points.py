@@ -9,7 +9,6 @@ from cv_bridge import CvBridge
 import rospy
 ## Message definitions
 from std_msgs.msg import String
-from std_msgs.msg import Bool
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
 from vision_msgs.msg import Skeleton2d
 from sensor_msgs.msg import Image
@@ -19,7 +18,7 @@ from geometry_msgs.msg import TransformStamped
 
 # Math 
 import numpy as np
-from math import pow, sqrt, sin, cos, tan, radians
+from math import pow, sqrt, sin, tan, radians
 
 class BodyPoints():
     def __init__(self, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
@@ -99,6 +98,12 @@ class BodyPoints():
         right_hip      = self.msg_poseLandmarks.points[self.msg_poseLandmarks.RIGHT_HIP]
         left_hip       = self.msg_poseLandmarks.points[self.msg_poseLandmarks.LEFT_HIP]
 
+        rospy.loginfo("TORSO")
+        rospy.loginfo(right_hip)
+        rospy.loginfo(left_hip)
+        rospy.loginfo(right_shoulder)
+        rospy.loginfo(left_shoulder)
+
         # Calculates the torso center point
         torsoCenter = Point(
                          (right_shoulder.x + left_shoulder.x + right_hip.x + left_hip.x)/4,
@@ -119,7 +124,7 @@ class BodyPoints():
             imageHeight, imageWidth = img.shape
         ## RGB image gives three dimensions (the third is color channel)
         else:
-            imageHeight, imageWidth, a = img.shape
+            imageHeight, imageWidth, _ = img.shape
 
         # Calculates the torso width and height
         torsoWidth = max(abs(right_shoulder.x - left_shoulder.x) * imageWidth, 1)
@@ -264,12 +269,12 @@ class BodyPoints():
                     self.msg_targetPoint.point = Point(0, 0, 0)
 
             # Console logs
-            rospy.loginfo("\nTARGET")
-            rospy.loginfo(" - status: {}".format(self.msg_targetStatus))
-            rospy.loginfo(" - xyz: ({}, {}, {})".format(
-                self.msg_targetPoint.point.x, 
-                self.msg_targetPoint.point.y, 
-                self.msg_targetPoint.point.z))
+            # rospy.loginfo("\nTARGET")
+            # rospy.loginfo(" - status: {}".format(self.msg_targetStatus))
+            # rospy.loginfo(" - xyz: ({}, {}, {})".format(
+            #     self.msg_targetPoint.point.x, 
+            #     self.msg_targetPoint.point.y, 
+            #     self.msg_targetPoint.point.z))
 
             self.PublishEverything()
               
