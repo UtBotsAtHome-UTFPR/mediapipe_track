@@ -269,12 +269,12 @@ class BodyPoints():
                     self.msg_targetPoint.point = Point(0, 0, 0)
 
             # Console logs
-            # rospy.loginfo("\nTARGET")
-            # rospy.loginfo(" - status: {}".format(self.msg_targetStatus))
-            # rospy.loginfo(" - xyz: ({}, {}, {})".format(
-            #     self.msg_targetPoint.point.x, 
-            #     self.msg_targetPoint.point.y, 
-            #     self.msg_targetPoint.point.z))
+            rospy.loginfo("\nTARGET")
+            rospy.loginfo(" - status: {}".format(self.msg_targetStatus))
+            rospy.loginfo(" - xyz: ({}, {}, {})".format(
+                self.msg_targetPoint.point.x, 
+                self.msg_targetPoint.point.y, 
+                self.msg_targetPoint.point.z))
 
             self.PublishEverything()
               
