@@ -98,12 +98,6 @@ class BodyPoints():
         right_hip      = self.msg_poseLandmarks.points[self.msg_poseLandmarks.RIGHT_HIP]
         left_hip       = self.msg_poseLandmarks.points[self.msg_poseLandmarks.LEFT_HIP]
 
-        rospy.loginfo("TORSO")
-        rospy.loginfo(right_hip)
-        rospy.loginfo(left_hip)
-        rospy.loginfo(right_shoulder)
-        rospy.loginfo(left_shoulder)
-
         # Calculates the torso center point
         torsoCenter = Point(
                          (right_shoulder.x + left_shoulder.x + right_hip.x + left_hip.x)/4,
