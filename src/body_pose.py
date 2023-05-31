@@ -31,6 +31,7 @@ class BodyPose():
         self.msg_targetSkeletonImg      = Image()
         self.msg_poseLandmarks          = Skeleton2d()
         self.msg_selectedPerson         = Object()
+        self.msg_poseWorldLandmarks     = Skeleton2d()
 
         # If the selected person is available, uses the subscribed person ROI and image in the Pose estimation
         self.use_person_roi = False
@@ -53,6 +54,8 @@ class BodyPose():
             "/utbots/vision/person/pose/skeletonImg", Image, queue_size=10)
         self.pub_poseLandmarks = rospy.Publisher(
             "/utbots/vision/person/pose/poseLandmarks", Skeleton2d, queue_size=10)
+        self.pub_poseWorldLandmarks = rospy.Publisher(
+            "/utbots/vision/person/pose/poseWorldLandmarks", Skeleton2d, queue_size=10)
 
         # ROS node
         rospy.init_node('body_pose', anonymous=True)
@@ -129,7 +132,7 @@ class BodyPose():
         landmarks = []
         for lmark in self.mp_pose.PoseLandmark:
             landmarks.append(self.PointByLmarks(landmark[lmark]))
-        self.msg_poseLandmarks.points = landmarks
+        return landmarks
 
     def PointByLmarks(self, landmark):
         # We want to use the parent image (full Kinect camera image) reference for the image
@@ -160,6 +163,7 @@ class BodyPose():
     def PublishEverything(self):
         self.pub_targetSkeletonImg.publish(self.msg_targetSkeletonImg)
         self.pub_poseLandmarks.publish(self.msg_poseLandmarks)
+        self.pub_poseWorldLandmarks.publish(self.msg_poseWorldLandmarks)
         self.pub_targetStatus.publish(self.msg_targetStatus)
 
 # Main
@@ -179,9 +183,11 @@ class BodyPose():
                 self.msg_targetSkeletonImg = self.cvBridge.cv2_to_imgmsg(cv_rgbImg)
 
                 # Processes pose results 
-                # Results are Pose WORLD Landmarks, otherwise the data format does not represent metric real distances
-                if poseResults.pose_world_landmarks:  
-                    self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
+                if poseResults.pose_landmarks:
+                    # Pose Landmarks are normalized image coordinates
+                    self.msg_poseLandmarks.points = self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
+                    # Pose WORLD Landmarks represent metric coordinates in the 3d space from the camera reference
+                    self.msg_poseWorldLandmarks.points = self.SetLandmarkPoints(poseResults.pose_world_landmarks.landmark)
                     self.msg_targetStatus = "Detected"
                 else:
                     self.msg_targetStatus = "Not Detected"
