@@ -19,14 +19,10 @@ from sensor_msgs.msg import Image
 from vision_msgs.msg import Skeleton2d
 
 class BodyPose():
-    def __init__(self, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
-        # Image FOV for trig calculations
-        self.camFov_vertical = camFov_vertical
-        self.camFov_horizontal = camFov_horizontal
+    def __init__(self, topic_rgbImg):
 
         # Messages
         self.msg_rgbImg                 = None      # Image
-        self.msg_depthImg               = None      # Image
         self.msg_targetStatus           = "Not Detected" # String
         self.msg_targetSkeletonImg      = Image()
         self.msg_poseLandmarks          = Skeleton2d()
@@ -34,22 +30,19 @@ class BodyPose():
 
         # To tell if there's a new msg
         self.newRgbImg = False
-        self.newDepthImg = False
 
         # Publishers and Subscribers
         self.sub_rgbImg = rospy.Subscriber(
             topic_rgbImg, Image, self.callback_rgbImg)
-        self.sub_depthImg = rospy.Subscriber(
-            topic_depthImg, Image, self.callback_depthImg)
 
         self.pub_targetStatus = rospy.Publisher(
-            "/utbots/vision/person/pose/status", String, queue_size=10)
+            "pose/status", String, queue_size=10)  
         self.pub_targetSkeletonImg = rospy.Publisher(
-            "/utbots/vision/person/pose/skeletonImg", Image, queue_size=10)
+            "pose/skeletonImg", Image, queue_size=10)
         self.pub_poseLandmarks = rospy.Publisher(
-            "/utbots/vision/person/pose/poseLandmarks", Skeleton2d, queue_size=10)
+            "pose/poseLandmarks", Skeleton2d, queue_size=10)
         self.pub_poseWorldLandmarks = rospy.Publisher(
-            "/utbots/vision/person/pose/poseWorldLandmarks", Skeleton2d, queue_size=10)
+            "pose/poseWorldLandmarks", Skeleton2d, queue_size=10)
 
         # ROS node
         rospy.init_node('body_pose', anonymous=True)
@@ -78,10 +71,6 @@ class BodyPose():
     def callback_rgbImg(self, msg):
         self.msg_rgbImg = msg
         self.newRgbImg = True
-
-    def callback_depthImg(self, msg):
-        self.msg_depthImg = msg
-        self.newDepthImg = True
     
 # Basic MediaPipe Pose methods
     def ProcessImg(self):
@@ -159,7 +148,4 @@ class BodyPose():
     
 if __name__ == "__main__":
     BodyPose(
-        "/camera/rgb/image_raw",
-        "/camera/depth_registered/image_raw",
-        43,
-        57)
+        "/camera/rgb/image_raw")

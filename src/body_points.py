@@ -48,18 +48,18 @@ class BodyPoints():
         self.sub_depthImg = rospy.Subscriber(
             topic_depthImg, Image, self.callback_depthImg)
         self.sub_poseLandmarks = rospy.Subscriber(
-            "/utbots/vision/person/pose/poseLandmarks", Skeleton2d, self.callback_poseLandmarks)
+            "pose/poseLandmarks", Skeleton2d, self.callback_poseLandmarks)
         self.sub_targetStatus = rospy.Subscriber(
-            "/utbots/vision/person/pose/status", String, self.callback_targetStatus)
+            "pose/status", String, self.callback_targetStatus)
 
         self.pub_tf = rospy.Publisher(
             "/tf", tfMessage, queue_size=1)
         self.pub_targetPoint = rospy.Publisher(
-            "/utbots/vision/person/selected/torsoPoint", PointStamped, queue_size=10)
+            "selected/torsoPoint", PointStamped, queue_size=10)
         self.pub_targetCroppedRgbTorso = rospy.Publisher(
-            "/utbots/vision/person/selected/croppedTorso/rgb", Image, queue_size=10)
+            "selected/croppedTorso/rgb", Image, queue_size=10)
         self.pub_targetCroppedDepthTorso = rospy.Publisher(
-            "/utbots/vision/person/selected/croppedTorso/depth", Image, queue_size=10)
+            "selected/croppedTorso/depth", Image, queue_size=10)
 
         # ROS node
         rospy.init_node('body_points', anonymous=True)
