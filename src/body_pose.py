@@ -16,17 +16,28 @@ import rospy
 from std_msgs.msg import String
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import Image
-from vision_msgs.msg import Skeleton2d
+from vision_msgs.msg import Skeleton2d, Object
 
 class BodyPose():
+<<<<<<< HEAD
     def __init__(self, topic_rgbImg):
+=======
+    def __init__(self, topic_selectedPerson, topic_rgbImg, topic_depthImg, camFov_vertical, camFov_horizontal):
+        # Image FOV for trig calculations
+        self.camFov_vertical = camFov_vertical
+        self.camFov_horizontal = camFov_horizontal
+>>>>>>> bebf8e7519a86c1712372af224857220c45ccdc7
 
         # Messages
         self.msg_rgbImg                 = None      # Image
         self.msg_targetStatus           = "Not Detected" # String
         self.msg_targetSkeletonImg      = Image()
         self.msg_poseLandmarks          = Skeleton2d()
+        self.msg_selectedPerson         = Object()
         self.msg_poseWorldLandmarks     = Skeleton2d()
+
+        # If the selected person is available, uses the subscribed person ROI and image in the Pose estimation
+        self.use_person_roi = False
 
         # To tell if there's a new msg
         self.newRgbImg = False
@@ -34,6 +45,13 @@ class BodyPose():
         # Publishers and Subscribers
         self.sub_rgbImg = rospy.Subscriber(
             topic_rgbImg, Image, self.callback_rgbImg)
+<<<<<<< HEAD
+=======
+        self.sub_depthImg = rospy.Subscriber(
+            topic_depthImg, Image, self.callback_depthImg)
+        self.sub_selectedPerson = rospy.Subscriber(
+            topic_selectedPerson, Object, self.callback_selectedPerson)
+>>>>>>> bebf8e7519a86c1712372af224857220c45ccdc7
 
         self.pub_targetStatus = rospy.Publisher(
             "pose/status", String, queue_size=10)  
@@ -71,11 +89,27 @@ class BodyPose():
     def callback_rgbImg(self, msg):
         self.msg_rgbImg = msg
         self.newRgbImg = True
+<<<<<<< HEAD
+=======
+
+    def callback_depthImg(self, msg):
+        self.msg_depthImg = msg
+        self.newDepthImg = True
+
+    def callback_selectedPerson(self, msg):
+        self.use_person_roi = True
+        self.msg_selectedPerson = msg
+>>>>>>> bebf8e7519a86c1712372af224857220c45ccdc7
     
 # Basic MediaPipe Pose methods
     def ProcessImg(self):
         # Conversion to cv image
-        cvImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, "bgr8")
+        ## Uses the cropped image of the selected person
+        if self.use_person_roi == True:
+            cvImg = self.cvBridge.imgmsg_to_cv2(self.msg_selectedPerson.cropped, "bgr8")
+        ## Uses full Kinect camera image
+        else: 
+            cvImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, "bgr8")
 
         # Not writeable passes by reference (better performance)
         cvImg.flags.writeable = False
@@ -109,7 +143,29 @@ class BodyPose():
         return landmarks
 
     def PointByLmarks(self, landmark):
-        return Point(landmark.x, landmark.y, landmark.z)
+        # We want to use the parent image (full Kinect camera image) reference for the image
+
+        # Necessary coordinate transformation if it uses cropped image
+        # The landmarks are normalized image coordinates, for different images, the coordinates are different
+        ## Therefore, we convert normalized cropped image coordinates to cartesian:
+        ## x_cropped_cartesian = landmark.x * cropped_width
+        ## Add the cropped image x0: 
+        ## x_parent_cartesian = x_cropped_cartesian + x0 
+        ## And convert to normalized parent image coordinates:
+        ## x_parent_norm = x_parent_cartesian/parent_width
+        if(self.use_person_roi == True):
+            cvImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, "bgr8")
+            parent_height, parent_width, _ = cvImg.shape
+            cropped_height = self.msg_selectedPerson.roi.height
+            cropped_width  = self.msg_selectedPerson.roi.width
+            cropped_x0 = self.msg_selectedPerson.roi.x_offset
+            cropped_y0 = self.msg_selectedPerson.roi.y_offset
+            return Point((cropped_x0 + landmark.x*cropped_width)/parent_width,
+                         (cropped_y0 + landmark.y*cropped_height)/parent_height,
+                         landmark.z)
+        # No transformation required
+        else:
+            return Point(landmark.x, landmark.y, landmark.z)
 
 # Nodes Publish
     def PublishEverything(self):
@@ -148,4 +204,12 @@ class BodyPose():
     
 if __name__ == "__main__":
     BodyPose(
+<<<<<<< HEAD
         "/camera/rgb/image_raw")
+=======
+        "/utbots/vision/person/selected/object",
+        "/camera/rgb/image_raw",
+        "/camera/depth_registered/image_raw",
+        43,
+        57)
+>>>>>>> bebf8e7519a86c1712372af224857220c45ccdc7

@@ -275,6 +275,6 @@ class BodyPoints():
 if __name__ == "__main__":
     BodyPoints(
         "/camera/rgb/image_raw",
-        "/camera/depth/image_raw",
+        "/camera/depth_registered/image_raw",
         43,
         57)

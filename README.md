@@ -2,6 +2,7 @@
 - ROS package that applies [MediaPipe Pose solution](https://google.github.io/mediapipe/solutions/pose) 
 - Tested Kinect V1 RGB and Depth images 
 - Important addition to MediaPipe Pose: ability to calculate and detect the person's 3D position and publish this information in ROS Topics so the robot can know its relative position from the person detected.
+- Support for use of person bounding box image
 
 ### Getting started
 - #### Installation
