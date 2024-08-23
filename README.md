@@ -18,7 +18,7 @@ catkin_make
 ### Dependencies
 This package depends on [freenect_launch](https://github.com/ros-drivers/freenect_stack) and runs on python, with mediapipe library.
 
-The code runs on Python 3.8 and you must use a virtualenv (Install with `pip install virtualenv`) with the path `/usr/bin/mediapipe_track_env/bin/python` as the node expects its existence to run. Install the requirements:
+The code runs on Python 3.8 and you must use a virtualenv (Install with `pip install virtualenv`) with the path `/usr/bin/venv_mediapipe_track/bin/python` as the node expects its existence to run. Install the requirements:
 
 ```bash
 cd /usr/bin
