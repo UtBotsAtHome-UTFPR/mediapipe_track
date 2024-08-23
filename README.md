@@ -22,9 +22,9 @@ The code runs on Python 3.8 and you must use a virtualenv (Install with `pip ins
 
 ```bash
 cd /usr/bin
-sudo python3 -m virtualenv mediapipe_track_env --python=$(which python3)
+sudo python3 -m virtualenv venv_mediapipe_track --python=$(which python3)
 roscd mediapipe_track/src
-/usr/bin/mediapipe_track_env/bin/python -m pip install -r requirements.txt
+/usr/bin/venv_mediapipe_track/bin/python -m pip install -r requirements.txt
 ```
 
 ## Running

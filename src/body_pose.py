@@ -1,4 +1,4 @@
-#!/usr/bin/mediapipe_track_env/bin/python
+#!/usr/bin/venv_mediapipe_track/bin/python
 
 # ROS implementation of the Mediapipe Pose solution up to the 2022 libraries
 # Inputs the sensor_msgs/Image message to feed the landmarks processing, outputs the skeletonImage, the detection status and the landmarks list
