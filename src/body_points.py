@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/mediapipe_track_env/bin/python
 
 # Through MP Pose landmarks and RGB-D images estimates a 3d point (geometry_msgs/PointStamped) for the detected person from the camera reference 
 
