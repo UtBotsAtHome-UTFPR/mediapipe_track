@@ -18,34 +18,14 @@ catkin_make
 ### Dependencies
 This package depends on [freenect_launch](https://github.com/ros-drivers/freenect_stack) and runs on python, with mediapipe library.
 
-**Pip requirements (skip if using Jetson + Ubuntu 18)**
+The code runs on Python 3.8 and depends on mediapipe. Install the requirements:
 
 ```bash
 roscd mediapipe_track/src
-python3 -m pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 
-**Only for Jetson Nano + Ubuntu 18**
-
-Install Python 3.9 and virtualenv:
-```bash
-sudo add-apt-repository ppa:deadsnakes/ppa # Repository with many Python versions
-sudo apt update
-sudo apt install python3.9 python3.9-venv -y
-python3.9 -m pip install virtualenv
-PY_LOCATION=$(which python3.9)
-roscd mediapipe_track/src
-python3.9 -m virtualenv venv --python=$PY_LOCATION # Create virtual env
-source venv/bin/activate # Enter virtual env
-python -m pip install -r requirements.txt
-```
-
-You should **only use Mediapipe with the virtual Python executable**:
-```bash
-source venv/bin/activate # Enter virtual env
-python body_pose.py   # Instead of "rosrun mediapipe_track body_pose.py"
-python body_points.py # Instead of "rosrun mediapipe_track body_points.py"
-```
+**OBS**: because of permission problems with the model access in the library, mediapipe's libraries will not be located in a virtualenv yet
 
 ## Running
 
