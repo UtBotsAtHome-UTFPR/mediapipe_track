@@ -26,11 +26,37 @@ from utbots_actions.msg import MPPoseAction, MPPoseResult
 ## Transformation tree
 from tf.msg import tfMessage
 
+class Camera():
+    def __init__(self, fov_vertical, fov_horizontal, rgb_topic, depth_topic):
+        self.fov_vertical = fov_vertical
+        self.fov_horizontal = fov_horizontal
+        self.rgb_topic = rgb_topic
+        self.depth_topic = depth_topic
+
 class PersonPoseAction():
     def __init__(self):
         # Image FOV for trig calculations
-        self.camFov_vertical = 43
-        self.camFov_horizontal = 57
+        cameras = {
+            "kinect": Camera(43, 57, "/camera/rgb/image_color", "/camera/depth_registered/image_raw"),
+            "realsense": Camera(57, 86, "/camera/color/image_raw", "/camera/depth/image_raw")
+        }
+
+        # ROS node
+        rospy.init_node('person_pose', anonymous=True)
+
+        # Parameters
+        self.camera = rospy.get_param('~camera', 'realsense')
+
+        # Select camera
+        try:
+            selected_camera = cameras[self.camera]
+        except:
+            selected_camera = cameras["realsense"]
+
+        self.camFov_vertical = selected_camera.fov_vertical
+        self.camFov_horizontal = selected_camera.fov_horizontal
+        self.camera_rgb_topic = selected_camera.rgb_topic
+        self.camera_depth_topic = selected_camera.depth_topic
 
         # Messages
         self.msg_rgbImg                      = None             # Image
@@ -46,9 +72,9 @@ class PersonPoseAction():
 
         # Publishers and Subscribers
         self.sub_rgbImg = rospy.Subscriber(
-            "/camera/rgb/image_raw", Image, self.callback_rgbImg)
+            self.camera_rgb_topic, Image, self.callback_rgbImg)
         self.sub_depthImg = rospy.Subscriber(
-            "/camera/depth/image_raw", Image, self.callback_depthImg)
+            self.camera_depth_topic, Image, self.callback_depthImg)
 
         self.pub_targetStatus = rospy.Publisher(
             "pose/status", String, queue_size=1)  
@@ -63,8 +89,6 @@ class PersonPoseAction():
         self.pub_tf = rospy.Publisher(
             "/tf", tfMessage, queue_size=1)
 
-        # ROS node
-        rospy.init_node('person_pose', anonymous=True)
 
         # Time
         self.loopRate = rospy.Rate(30)
@@ -266,70 +290,70 @@ class PersonPoseAction():
         #     cvImg = self.bridge.imgmsg_to_cv2(goal.Image, desired_encoding="bgr8")
         # else:
         
-        try:
-            # Topic subscribed image
-            cvImg = self.ProcessImg()
-                
-            # Process the results
-            poseResults = self.pose.process(cv2.cvtColor(cvImg, cv2.COLOR_BGR2RGB))
+        # try:
+        # Topic subscribed image
+        cvImg = self.ProcessImg()
+            
+        # Process the results
+        poseResults = self.pose.process(cv2.cvtColor(cvImg, cv2.COLOR_BGR2RGB))
 
-            self.msg_targetSkeletonImg = self.DrawLandmarks(cvImg, poseResults)
+        self.msg_targetSkeletonImg = self.DrawLandmarks(cvImg, poseResults)
 
-            # Manage action results
-            action_res = MPPoseResult()
-            action_res.Success = Bool()
-        
-            # Processes pose results 
-            if poseResults.pose_landmarks:
-                # Pose Landmarks are normalized image coordinates
-                self.msg_poseLandmarks.points = self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
-                self.msg_targetStatus = "Detected"
+        # Manage action results
+        action_res = MPPoseResult()
+        action_res.Success = Bool()
+    
+        # Processes pose results 
+        if poseResults.pose_landmarks:
+            # Pose Landmarks are normalized image coordinates
+            self.msg_poseLandmarks.points = self.SetLandmarkPoints(poseResults.pose_landmarks.landmark)
+            self.msg_targetStatus = "Detected"
 
-                # Calculate torso center point
-                torsoCenter = self.CalculateTorsoCenter()
+            # Calculate torso center point
+            torsoCenter = self.CalculateTorsoCenter()
 
-                # Converts the rgb image to OpenCV format, so it can be manipulated (32FC1 depth encoding)
-                depth_img_encoding = "32FC1"
-                cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, depth_img_encoding)
+            # Converts the rgb image to OpenCV format, so it can be manipulated (32FC1 depth encoding)
+            depth_img_encoding = "32FC1"
+            cv_depthImg = self.cvBridge.imgmsg_to_cv2(self.msg_depthImg, depth_img_encoding)
 
-                # Try to crop the depth torso image and calculate 3d torso point
-                try:
-                    croppedDepthImg = self.CropTorsoImg(cv_depthImg, depth_img_encoding, torsoCenter)
-                    self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
-                    self.msg_targetPoint.point = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
+            # Try to crop the depth torso image and calculate 3d torso point
+            try:
+                croppedDepthImg = self.CropTorsoImg(cv_depthImg, depth_img_encoding, torsoCenter)
+                self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
+                self.msg_targetPoint.point = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
 
-                    action_res.Point = self.msg_targetPoint
-                    action_res.Success.data = True
+                action_res.Point = self.msg_targetPoint
+                action_res.Success.data = True
 
-                    # Point creation timestamp
-                    t_now = rospy.get_time()
-                    self.t_last = t_now
-                except:
-                    rospy.logerr("------------- Error in depth crop -------------")
-                    # return 0               
-            else:
-                self.msg_targetStatus = "Not Detected"
+                # Point creation timestamp
                 t_now = rospy.get_time()
-                # Evaluates time interval from the last detected person point calculated
-                # Sets the point values to origin if the interval is bigger than the defined timeout
-                if (t_now - self.t_last > self.t_timeout):
-                    self.t_last = t_now
-                    self.msg_targetPoint.point = Point(0, 0, 0)
-                action_res.Success.data = False
-            self._as.set_succeeded(action_res)
+                self.t_last = t_now
+            except:
+                rospy.logerr("------------- Error in depth crop -------------")
+                # return 0               
+        else:
+            self.msg_targetStatus = "Not Detected"
+            t_now = rospy.get_time()
+            # Evaluates time interval from the last detected person point calculated
+            # Sets the point values to origin if the interval is bigger than the defined timeout
+            if (t_now - self.t_last > self.t_timeout):
+                self.t_last = t_now
+                self.msg_targetPoint.point = Point(0, 0, 0)
+            action_res.Success.data = False
+        self._as.set_succeeded(action_res)
 
-            # Console logs
-            rospy.loginfo("[MPPOSE] status: {}".format(self.msg_targetStatus))
-            rospy.loginfo("[MPPOSE] xyz: ({}, {}, {})".format(
-                self.msg_targetPoint.point.x, 
-                self.msg_targetPoint.point.y, 
-                self.msg_targetPoint.point.z))
+        # Console logs
+        rospy.loginfo("[MPPOSE] status: {}".format(self.msg_targetStatus))
+        rospy.loginfo("[MPPOSE] xyz: ({}, {}, {})".format(
+            self.msg_targetPoint.point.x, 
+            self.msg_targetPoint.point.y, 
+            self.msg_targetPoint.point.z))
 
-            self.PublishEverything()
+        self.PublishEverything()
 
-        except:
-            rospy.loginfo("Not ready yet")
-            self._as.set_aborted(action_res)
+        # except:
+        #     rospy.loginfo("Not ready yet")
+        #     self._as.set_aborted(action_res)
 
 # Main
     def mainLoop(self):
