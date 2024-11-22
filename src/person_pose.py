@@ -3,28 +3,24 @@
 # ROS implementation of the Mediapipe Pose solution up to the 2022 libraries
 # Inputs the sensor_msgs/Image message to feed the landmarks processing, outputs the skeletonImage, the detection status and the landmarks list
 
-# Mediapipe imports
+#!/usr/bin/env python3
+
 import cv2
 import mediapipe as mp
-
-# Math 
 import numpy as np
 from math import pow, sqrt, sin, tan, radians
-
-# Image processing
 from cv_bridge import CvBridge
-
-# ROS
-import rospy
-import actionlib
-## Message definitions
+import rclpy
+from rclpy.node import Node
+from rclpy.publisher import Publisher
+from rclpy.subscription import Subscription
 from std_msgs.msg import String, Bool
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
 from sensor_msgs.msg import Image
 from vision_msgs.msg import Skeleton2d, Object
 from utbots_actions.msg import MPPoseAction, MPPoseResult
-## Transformation tree
-from tf.msg import tfMessage
+from tf2_ros import TransformBroadcaster
+from rclpy.action import ActionServer
 
 class Camera():
     def __init__(self, fov_vertical, fov_horizontal, rgb_topic, depth_topic):
@@ -33,19 +29,18 @@ class Camera():
         self.rgb_topic = rgb_topic
         self.depth_topic = depth_topic
 
-class PersonPoseAction():
+class PersonPoseAction(Node):
     def __init__(self):
+        super().__init__('person_pose')
+
         # Image FOV for trig calculations
         cameras = {
             "kinect": Camera(43, 57, "/camera/rgb/image_color", "/camera/depth_registered/image_raw"),
             "realsense": Camera(57, 86, "/camera/color/image_raw", "/camera/depth/image_raw")
         }
 
-        # ROS node
-        rospy.init_node('person_pose', anonymous=True)
-
         # Parameters
-        self.camera = rospy.get_param('~camera', 'realsense')
+        self.camera = self.declare_parameter('camera', 'realsense').value
 
         # Select camera
         try:
@@ -58,47 +53,47 @@ class PersonPoseAction():
         self.camera_rgb_topic = selected_camera.rgb_topic
         self.camera_depth_topic = selected_camera.depth_topic
 
+        # Tf
+        self.tf_broadcaster = TransformBroadcaster(self)
+
         # Messages
-        self.msg_rgbImg                      = None             # Image
-        self.msg_depthImg                    = None             # Image
-        self.msg_tfStamped                   = TransformStamped()
-        self.msg_targetStatus                = "Not Detected"
-        self.msg_targetCroppedDepthTorso     = Image()
-        self.msg_poseLandmarks               = Skeleton2d()
-        self.msg_targetSkeletonImg           = Image()
-        self.msg_selectedPerson              = Object()
-        self.msg_targetPoint                 = PointStamped()   # Point
+        self.msg_rgbImg = None
+        self.msg_depthImg = None
+        self.msg_targetStatus = "Not Detected"
+        self.msg_poseLandmarks = Skeleton2d()
+        self.msg_targetSkeletonImg = Image()
+        self.msg_selectedPerson = Object()
+        self.msg_targetPoint = PointStamped()
         self.msg_targetPoint.header.frame_id = "target"
 
         # Publishers and Subscribers
-        self.sub_rgbImg = rospy.Subscriber(
-            self.camera_rgb_topic, Image, self.callback_rgbImg)
-        self.sub_depthImg = rospy.Subscriber(
-            self.camera_depth_topic, Image, self.callback_depthImg)
+        self.sub_rgbImg = self.create_subscription(
+            Image,
+            self.camera_rgb_topic,
+            self.callback_rgbImg,
+            10
+        )
+        self.sub_depthImg = self.create_subscription(
+            Image,
+            self.camera_depth_topic,
+            self.callback_depthImg,
+            10
+        )
 
-        self.pub_targetStatus = rospy.Publisher(
-            "pose/status", String, queue_size=1)  
-        self.pub_targetSkeletonImg = rospy.Publisher(
-            "pose/skeletonImg", Image, queue_size=1)
-        self.pub_poseLandmarks = rospy.Publisher(
-            "pose/poseLandmarks", Skeleton2d, queue_size=1)
-        self.pub_targetCroppedDepthTorso = rospy.Publisher(
-            "selected/croppedTorso/depth", Image, queue_size=1)
-        self.pub_targetPoint = rospy.Publisher(
-            "selected/torsoPoint", PointStamped, queue_size=1)
-        self.pub_tf = rospy.Publisher(
-            "/tf", tfMessage, queue_size=1)
-
+        self.pub_targetStatus = self.create_publisher(String, "pose/status", 10)
+        self.pub_targetSkeletonImg = self.create_publisher(Image, "pose/skeletonImg", 10)
+        self.pub_poseLandmarks = self.create_publisher(Skeleton2d, "pose/poseLandmarks", 10)
+        self.pub_targetPoint = self.create_publisher(PointStamped, "selected/torsoPoint", 10)
+        self.pub_tf = TransformBroadcaster(self)
 
         # Time
-        self.loopRate = rospy.Rate(30)
-        self.t_last = 0.0  # sec
-        self.t_timeout = 2.250  # sec
+        self.loopRate = 30
+        self.t_last = 0.0
+        self.t_timeout = 2.250
 
         # Action server initialization
-        self._as = actionlib.SimpleActionServer('mediapipe_pose', MPPoseAction, self.pose_action, False)
-        self._as.start()
-
+        self._as = ActionServer(self, MPPoseAction, 'mediapipe_pose', self.pose_action_callback)
+        
         # Cv
         self.cvBridge = CvBridge()
         self.cv_img = None
@@ -108,13 +103,14 @@ class PersonPoseAction():
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.mp_pose = mp.solutions.pose
 
-        # Calls main loop
+        # Initialize pose model
         self.pose = self.mp_pose.Pose(
-            # Pose Configurations
             min_detection_confidence=0.75,
             min_tracking_confidence=0.9,
             model_complexity=2
-            )
+        )
+
+        # Main loop
         self.mainLoop()
 
 # Callbacks
@@ -126,16 +122,26 @@ class PersonPoseAction():
     
 # Basic MediaPipe Pose methods
     def ProcessImg(self):
-        # Conversion to cv image
-        cvImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, "bgr8")
+        # Check if the image message is available
+        if self.msg_rgbImg is not None:
+            try:
+                # Convert the ROS image message to an OpenCV image
+                cvImg = self.cvBridge.imgmsg_to_cv2(self.msg_rgbImg, "bgr8")
 
-        # Not writeable passes by reference (better performance)
-        cvImg.flags.writeable = False
+                # Set flags to prevent writing to the image, for performance
+                cvImg.flags.writeable = False
 
-        # Converts BGR to RGB
-        cvImg = cv2.cvtColor(cvImg, cv2.COLOR_BGR2RGB)
+                # Convert BGR to RGB (OpenCV default is BGR, but Mediapipe expects RGB)
+                cvImg = cv2.cvtColor(cvImg, cv2.COLOR_BGR2RGB)
 
-        return cvImg
+                return cvImg
+
+            except Exception as e:
+                self.get_logger().error(f"Error processing image: {str(e)}")
+                return None
+        else:
+            self.get_logger().warn("No RGB image available to process.")
+            return None
     
     def DrawLandmarks(self, cvImg, poseResults):
         # To draw the hand annotations on the image
@@ -256,34 +262,33 @@ class PersonPoseAction():
 
         return point_zxy
     
-
 # Transformation tree methods
     def SetupTfMsg(self, x, y, z):
-        self.msg_tfStamped.header.frame_id = "camera_link"
-        self.msg_tfStamped.header.stamp = rospy.Time.now()
-        self.msg_tfStamped.child_frame_id = "target"
-        self.msg_tfStamped.transform.translation.x = 0
-        self.msg_tfStamped.transform.translation.y = 0
-        self.msg_tfStamped.transform.translation.z = 0
-        self.msg_tfStamped.transform.rotation.x = 0.0
-        self.msg_tfStamped.transform.rotation.y = 0.0
-        self.msg_tfStamped.transform.rotation.z = 0.0
-        self.msg_tfStamped.transform.rotation.w = 1.0
+        msg_tfStamped = TransformStamped()
+        msg_tfStamped.header.frame_id = "camera_link"
+        msg_tfStamped.header.stamp = self.get_clock().now().to_msg()  # Get current time in ROS 2 format
+        msg_tfStamped.child_frame_id = "target"
+        msg_tfStamped.transform.translation.x = 0
+        msg_tfStamped.transform.translation.y = 0
+        msg_tfStamped.transform.translation.z = 0
+        msg_tfStamped.transform.rotation.x = 0.0
+        msg_tfStamped.transform.rotation.y = 0.0
+        msg_tfStamped.transform.rotation.z = 0.0
+        msg_tfStamped.transform.rotation.w = 1.0
 
-        msg_tf = tfMessage([self.msg_tfStamped])
-        self.pub_tf.publish(msg_tf)
+        # Broadcast transformations
+        self.tf_broadcaster.sendTransform(msg_tfStamped)
 
 # Nodes Publish
     def PublishEverything(self):
         self.pub_targetSkeletonImg.publish(self.msg_targetSkeletonImg)
         self.pub_poseLandmarks.publish(self.msg_poseLandmarks)
         self.pub_targetStatus.publish(self.msg_targetStatus)
-        self.pub_targetCroppedDepthTorso.publish(self.msg_targetCroppedDepthTorso)
         self.pub_targetPoint.publish(self.msg_targetPoint)
         self.SetupTfMsg(self.msg_targetPoint.point.x, self.msg_targetPoint.point.y, self.msg_targetPoint.point.z)
 
     def pose_action(self, goal):
-        rospy.loginfo("[MPPOSE] Goal recieved")
+        self.get_logger().info("[MPPOSE] Goal recieved")
         # Optional specific image sent as goal
         # if goal.Image.width != 0 and goal.Image.height != 0:
         #     print( goal.Image.width )
@@ -319,21 +324,20 @@ class PersonPoseAction():
             # Try to crop the depth torso image and calculate 3d torso point
             try:
                 croppedDepthImg = self.CropTorsoImg(cv_depthImg, depth_img_encoding, torsoCenter)
-                self.msg_targetCroppedDepthTorso = self.cvBridge.cv2_to_imgmsg(croppedDepthImg)
                 self.msg_targetPoint.point = self.Get3dPointFromDepthPixel(torsoCenter, self.GetTorsoDistance(croppedDepthImg))
 
                 action_res.Point = self.msg_targetPoint
                 action_res.Success.data = True
 
                 # Point creation timestamp
-                t_now = rospy.get_time()
+                t_now = self.get_clock().now().seconds()
                 self.t_last = t_now
             except:
-                rospy.logerr("------------- Error in depth crop -------------")
+                self.get_logger().error("------------- Error in depth crop -------------")
                 # return 0               
         else:
             self.msg_targetStatus = "Not Detected"
-            t_now = rospy.get_time()
+            t_now = self.get_clock().now().seconds()
             # Evaluates time interval from the last detected person point calculated
             # Sets the point values to origin if the interval is bigger than the defined timeout
             if (t_now - self.t_last > self.t_timeout):
@@ -343,8 +347,8 @@ class PersonPoseAction():
         self._as.set_succeeded(action_res)
 
         # Console logs
-        rospy.loginfo("[MPPOSE] status: {}".format(self.msg_targetStatus))
-        rospy.loginfo("[MPPOSE] xyz: ({}, {}, {})".format(
+        self.get_logger().info("[MPPOSE] status: {}".format(self.msg_targetStatus))
+        self.get_logger().info("[MPPOSE] xyz: ({}, {}, {})".format(
             self.msg_targetPoint.point.x, 
             self.msg_targetPoint.point.y, 
             self.msg_targetPoint.point.z))
@@ -352,13 +356,15 @@ class PersonPoseAction():
         self.PublishEverything()
 
         # except:
-        #     rospy.loginfo("Not ready yet")
+        #     self.get_logger().info("Not ready yet")
         #     self._as.set_aborted(action_res)
 
 # Main
-    def mainLoop(self):
-        while rospy.is_shutdown() == False:
-            self.loopRate.sleep()
-    
-if __name__ == "__main__":
-    PersonPoseAction()
+def main(args=None):
+    rclpy.init(args=args)
+    person_pose = PersonPoseAction()
+    rclpy.spin(person_pose)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
