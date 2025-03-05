@@ -1,4 +1,0 @@
-PyYAML==6.0
-opencv-python==4.7.0.72
-mediapipe==0.10.0
-rospkg==1.5.0
