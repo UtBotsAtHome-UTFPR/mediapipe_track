@@ -1,5 +1,7 @@
+#!/usr/bin/python3
+
 import mediapipe as mp
-from mediapipe_track.mediapipe_track.mediapipe_pose import MediaPipePose
+from mediapipe_pose import MediaPipePose
 import numpy as np
 import cv2
 from cv_bridge import CvBridge
@@ -11,6 +13,7 @@ from sensor_msgs.msg import Image
 from vision_msgs.msg import Skeleton2d
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
 from std_msgs.msg import String, Bool
+from std_srvs.srv import SetBool
 from tf2_ros import TransformBroadcaster
 
 class MediaPipeNode(Node, MediaPipePose):
@@ -58,7 +61,7 @@ class MediaPipeNode(Node, MediaPipePose):
 
         # Service to enable/disable synchronous processing
         self.srv_enable_sync = self.create_service(
-            Bool,
+            SetBool,
             'enable_synchronous',
             self.enable_synchronous_callback
         )
