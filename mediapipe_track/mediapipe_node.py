@@ -1,16 +1,16 @@
 #!/usr/bin/python3
 
 import mediapipe as mp
-from mediapipe_pose import MediaPipePose
+from .mediapipe_pose import MediaPipePose
 import numpy as np
 import cv2
 from cv_bridge import CvBridge
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer
-from utbots_actions.msg import MPPoseAction, MPPoseResult
+from utbots_actions.action import MPPose
 from sensor_msgs.msg import Image
-from vision_msgs.msg import Skeleton2d
+from utbots_msgs.msg import Skeleton2d
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
 from std_msgs.msg import String, Bool
 from std_srvs.srv import SetBool
@@ -68,7 +68,7 @@ class MediaPipeNode(Node, MediaPipePose):
         self.enable_synchronous = False
 
         # Action server initialization
-        self._as = ActionServer(self, MPPoseAction, 'mediapipe_pose', self.pose_action_callback)
+        self._as = ActionServer(self, MPPose, 'mediapipe_pose', self.pose_action_callback)
         
         self.synchronous_loop()
 
@@ -92,7 +92,7 @@ class MediaPipeNode(Node, MediaPipePose):
             img_msg = self.msg_rgb_img
 
         # Manage action results
-        action_res = MPPoseResult()
+        action_res = MPPose.Result()
         action_res.Success = Bool()
 
         pose_landmarks, skeleton_img, target_point = self.preprocess_and_predict(img_msg, draw=goal.GetDrawn, torso_point=goal.GetTorsoPoint)

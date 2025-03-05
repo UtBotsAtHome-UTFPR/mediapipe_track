@@ -5,12 +5,22 @@ package_name = 'mediapipe_track'
 setup(
     name=package_name,
     version='0.0.0',
-    packages=['mediapipe_track'],
-    install_requires=['setuptools', 'rclpy'],
+    packages=[package_name],
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+    ],
+    install_requires=['setuptools'],
     zip_safe=True,
+    maintainer='laser',
+    maintainer_email='utbots.home@gmail.com',
+    description='TODO: Package description',
+    license='TODO: License declaration',
+    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'person_pose = mediapipe_track.person_pose:main',  # Entry point for the node
+            'mediapipe_node = mediapipe_track.mediapipe_node:main',
         ],
     },
 )

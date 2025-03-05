@@ -17,7 +17,7 @@ from rclpy.subscription import Subscription
 from std_msgs.msg import String, Bool
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
 from sensor_msgs.msg import Image
-from vision_msgs.msg import Skeleton2d, Object
+from utbots_msgs.msg import Skeleton2d, Object
 from utbots_actions.msg import MPPoseAction, MPPoseResult
 from tf2_ros import TransformBroadcaster
 from rclpy.action import ActionServer
