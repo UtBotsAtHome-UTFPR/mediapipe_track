@@ -1,5 +1,5 @@
 import mediapipe as mp
-from mediapipe_classes import MediaPipePose
+from mediapipe_track.mediapipe_track.mediapipe_pose import MediaPipePose
 import numpy as np
 import cv2
 from cv_bridge import CvBridge
