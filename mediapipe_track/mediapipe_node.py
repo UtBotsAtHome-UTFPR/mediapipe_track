@@ -17,6 +17,49 @@ from std_srvs.srv import SetBool
 from tf2_ros import TransformBroadcaster
 
 class MediaPipeNode(Node, MediaPipePose):
+    """
+    A ROS2 node that processes RGB image messages using MediaPipe Pose estimation
+    and publishes detected skeleton landmarks, torso points, and overlay images.
+
+    ## Parameters:
+    - `topic_namespace` (string)
+    Namespace for published topics.
+    - `num_poses` (int)
+    Maximum number of poses to detect. => Inherited from MediaPipePose
+    - `detection_conf` (float)
+    Confidence threshold for detecting a pose. => Inherited from MediaPipePose
+    - `presence_conf` (float)
+    Confidence threshold for presence estimation. => Inherited from MediaPipePose
+    - `track_conf` (float)
+    Confidence threshold for pose tracking. => Inherited from MediaPipePose
+    - `segmentation_mask` (bool)
+    Whether to include segmentation mask output. => Inherited from MediaPipePose
+    - `rgb_topic` (string,)
+    Input topic for RGB images.
+
+    ## Publishers:
+    - `pose/skeleton_img` (sensor_msgs/Image)
+    Publishes a visualized image of detected poses.
+    - `pose/pose_landmarks` (utbots_msgs/Skeleton2d)
+    Publishes detected 2D skeleton landmarks.
+    - `pose/torso_point` (geometry_msgs/PointStamped)
+    Publishes the detected torso point.
+    - `tf` (tf2_msgs/TFMessage)
+    Broadcasts torso transform over TF.
+
+    ## Subscribers:
+    - `<rgb_topic>` (sensor_msgs/Image)
+    Subscribes to an RGB image stream for processing.
+
+    ## Services:
+    - `enable_synchronous` (std_srvs/SetBool)
+    Enables or disables synchronous pose processing.
+
+    ## Actions:
+    - `mediapipe_pose` (utbots_actions/MPPose)
+    Action server for processing an image and returning pose landmarks.
+
+    """
     def __init__(self):
         Node.__init__(self, 'mediapipe_node')
         MediaPipePose.__init__(self)
@@ -28,7 +71,7 @@ class MediaPipeNode(Node, MediaPipePose):
         self.declare_parameter('presence_conf', 0.5)
         self.declare_parameter('track_conf', 0.5)
         self.declare_parameter('segmentation_mask', False)
-        self.declare_parameter('rbg_topic', "camera/rgb/image_color")
+        self.declare_parameter('rbg_topic', "/usb_cam/image_raw")
 
         self.topic_namespace = self.get_parameter('topic_namespace').get_parameter_value().string_value
         self.num_poses = self.get_parameter('num_poses').get_parameter_value().integer_value
@@ -42,6 +85,7 @@ class MediaPipeNode(Node, MediaPipePose):
         self.msg_pose_landmarks = Skeleton2d()
         self.msg_target_skeleton_img = Image()
         self.msg_target_point = PointStamped()
+        self.msg_rgb_img = Image()
 
         # Publishers and Subscribers
         self.sub_rgbImg = self.create_subscription(
@@ -65,24 +109,29 @@ class MediaPipeNode(Node, MediaPipePose):
             'enable_synchronous',
             self.enable_synchronous_callback
         )
-        self.enable_synchronous = False
+        self.enable_synchronous = True
 
         # Action server initialization
         self._as = ActionServer(self, MPPose, 'mediapipe_pose', self.pose_action_callback)
         
-        self.synchronous_loop()
+        # Timer for synchronous processing
+        self.timer = self.create_timer(0.1, self.synchronous_callback)
 
     # Callbacks
     def callback_rgb_img(self, msg):
+        """ RBG image topic callback """
         self.msg_rgb_img = msg
+        print("RGB image received")
 
     def enable_synchronous_callback(self, request, response):
+        """ Enable sychronous service callback """
         self.enable_synchronous = request.data
         response.success = True
         response.message = f"Synchronous processing {'enabled' if self.enable_synchronous else 'disabled'}."
         return response
 
     def pose_action_callback(self, goal):
+        """ Single estimation asynchronous action callback """
         self.get_logger().info("[MPPOSE] Goal received")
 
         # Optional specific image sent as goal
@@ -93,40 +142,48 @@ class MediaPipeNode(Node, MediaPipePose):
 
         # Manage action results
         action_res = MPPose.Result()
-        action_res.Success = Bool()
+        action_res.success = Bool()
 
         pose_landmarks, skeleton_img, target_point = self.preprocess_and_predict(img_msg, draw=goal.GetDrawn, torso_point=goal.GetTorsoPoint)
 
+        # Publish results to topic and to action
         if pose_landmarks:
             self.pub_poseLandmarks.publish(pose_landmarks)
             
+            # Only considers TorsoPoint and Drawn if requested by Goal
             if goal.GetTorsoPoint:
-                action_res.Point(target_point)
+                action_res.point = target_point
                 self.pub_target_point.publish(target_point)
 
             if goal.GetDrawn:
-                self.pub_target_skeletonImg(skeleton_img)
+                self.pub_target_skeletonImg.publish(skeleton_img)
+                action_res.skeleton_img = skeleton_img
             
-            action_res.Success = True
+            action_res.success = True
             self._as.set_succeeded(action_res)
         else:
-            action_res.Success = False
+            action_res.success = False
             self._as.set_aborted()
 
     # Methods
-    def synchronous_loop(self):
-        if self.enable_synchronous:
-            img_msg = self.msg_rgb_img
-            pose_landmarks, _, _ = self.preprocess_and_predict(img_msg, draw=False, torso_point=False)
+    def synchronous_callback(self):
+        """ Synchronous processing callback, enabled/disabled by a service """
+        if self.enable_synchronous and self.msg_rgb_img is not None:
+            pose_landmarks, _, _ = self.preprocess_and_predict(self.msg_rgb_img, draw=False, torso_point=False)
             self.pub_poseLandmarks.publish(pose_landmarks)
 
     def preprocess_and_predict(self, img_msg, draw=False, torso_point=False):
+        """ Converts the img_msg to cv format, makes a landmark estimation with MediaPipe Pose and returns the results"""
         cv_img = self.imgmsg_to_cv(img_msg)
         pose_landmarks, drawn_img = self.predict_landmarks(cv_img, draw=draw)
                 
         self.msg_pose_landmarks.points = pose_landmarks
-        self.msg_target_skeleton_img = self.cvBridge.cv2_to_imgmsg(drawn_img)
+
+        # Draw landmarks in a skeleton img if requested
+        if draw:
+            self.msg_target_skeleton_img = self.cvBridge.cv2_to_imgmsg(drawn_img)
         
+        # Calculate the torso point if requested
         if torso_point:
             x, y, z = self.calculate_representative_point(pose_landmarks)
             self.msg_target_point.point = Point(x, y, z)
@@ -150,11 +207,12 @@ class MediaPipeNode(Node, MediaPipePose):
         return self.msg_pose_landmarks, self.msg_target_skeleton_img, self.msg_target_point        
 
     def imgmsg_to_cv(self, img_msg):
-        # Check if the image message is available
+        """ If the image message is available, tries to convert to RGB8 for processing"""
         if img_msg is not None:
             try:
                 # Convert the ROS image message to an OpenCV image
-                cv_img = self.cvBridge.imgmsg_to_cv2(img_msg, "rbg8")
+                cv_img = self.cvBridge.imgmsg_to_cv2(img_msg, "bgr8")
+                cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
                 return cv_img
 
             except Exception as e:
