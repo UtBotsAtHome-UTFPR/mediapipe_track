@@ -94,9 +94,9 @@ class MediaPipeNode(Node, MediaPipePose):
             self.callback_rgb_img,
             10
         )
-        self.pub_target_skeletonImg = self.create_publisher(Image, "pose/skeleton_img", 10)
-        self.pub_poseLandmarks = self.create_publisher(Skeleton2d, "pose/pose_landmarks", 10)
-        self.pub_target_point = self.create_publisher(PointStamped, "pose/torso_point", 10)
+        self.pub_target_skeletonImg = self.create_publisher(Image, self.topic_namespace + "pose/skeleton_img", 10)
+        self.pub_poseLandmarks = self.create_publisher(Skeleton2d, self.topic_namespace + "pose/pose_landmarks", 10)
+        self.pub_target_point = self.create_publisher(PointStamped, self.topic_namespace + "pose/torso_point", 10)
         self.pub_tf = TransformBroadcaster(self)
 
         # OpenCV image format conversion
