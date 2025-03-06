@@ -4,6 +4,7 @@ import mediapipe as mp
 from .mediapipe_pose import MediaPipePose
 import numpy as np
 import cv2
+import os
 from cv_bridge import CvBridge
 import rclpy
 from rclpy.node import Node
@@ -15,6 +16,10 @@ from geometry_msgs.msg import PointStamped, Point, TransformStamped
 from std_msgs.msg import String, Bool
 from std_srvs.srv import SetBool
 from tf2_ros import TransformBroadcaster
+import ament_index_python.packages
+
+package_path = ament_index_python.packages.get_package_share_directory("mediapipe_track")
+package_root = os.path.dirname(package_path)
 
 class MediaPipeNode(Node, MediaPipePose):
     """
@@ -24,6 +29,8 @@ class MediaPipeNode(Node, MediaPipePose):
     ## Parameters:
     - `topic_namespace` (string)
     Namespace for published topics.
+    - `model_path` (string)
+    Path of the selected MediaPipe model. => Inherited from MediaPipePose
     - `num_poses` (int)
     Maximum number of poses to detect. => Inherited from MediaPipePose
     - `detection_conf` (float)
@@ -34,6 +41,10 @@ class MediaPipeNode(Node, MediaPipePose):
     Confidence threshold for pose tracking. => Inherited from MediaPipePose
     - `segmentation_mask` (bool)
     Whether to include segmentation mask output. => Inherited from MediaPipePose
+    - `draw_skeleton_img` (string)
+    Enable drawing skeleton image for synchronous processing.
+    - `calculate_torso_point` (string)
+    Enable torso point estimation for synchronous processing.
     - `rgb_topic` (string,)
     Input topic for RGB images.
 
@@ -66,12 +77,15 @@ class MediaPipeNode(Node, MediaPipePose):
 
         # Set parameters
         self.declare_parameter('topic_namespace', "/utbots/vision")
+        self.declare_parameter('model_path', '')
         self.declare_parameter('num_poses', 1)
         self.declare_parameter('detection_conf', 0.5)
         self.declare_parameter('presence_conf', 0.5)
         self.declare_parameter('track_conf', 0.5)
         self.declare_parameter('segmentation_mask', False)
-        self.declare_parameter('rbg_topic', "/usb_cam/image_raw")
+        self.declare_parameter('draw_skeleton_img', True)
+        self.declare_parameter('calculate_torso_point', True)
+        self.declare_parameter('rbg_topic', "/image_raw")
 
         self.topic_namespace = self.get_parameter('topic_namespace').get_parameter_value().string_value
         self.num_poses = self.get_parameter('num_poses').get_parameter_value().integer_value
@@ -79,7 +93,14 @@ class MediaPipeNode(Node, MediaPipePose):
         self.presence_conf = self.get_parameter('presence_conf').get_parameter_value().double_value
         self.track_conf = self.get_parameter('track_conf').get_parameter_value().double_value
         self.segmentation_mask = self.get_parameter('segmentation_mask').get_parameter_value().bool_value
+        self.draw_param = self.get_parameter('draw_skeleton_img').get_parameter_value().bool_value
+        self.torso_param = self.get_parameter('calculate_torso_point').get_parameter_value().bool_value
         self.rgb_topic = self.get_parameter('rbg_topic').get_parameter_value().string_value
+        model_path = self.get_parameter('model_path').get_parameter_value().string_value
+        if model_path == '':
+            self.model_path=package_path + "/models/pose_landmarker_lite.task"
+        else:
+            self.model_path=model_path
 
         # Define ROS messages
         self.msg_pose_landmarks = Skeleton2d()
@@ -109,7 +130,7 @@ class MediaPipeNode(Node, MediaPipePose):
             'enable_synchronous',
             self.enable_synchronous_callback
         )
-        self.enable_synchronous = True
+        self.enable_synchronous = False
 
         # Action server initialization
         self._as = ActionServer(self, MPPose, 'mediapipe_pose', self.pose_action_callback)
@@ -121,7 +142,6 @@ class MediaPipeNode(Node, MediaPipePose):
     def callback_rgb_img(self, msg):
         """ RBG image topic callback """
         self.msg_rgb_img = msg
-        print("RGB image received")
 
     def enable_synchronous_callback(self, request, response):
         """ Enable sychronous service callback """
@@ -169,40 +189,56 @@ class MediaPipeNode(Node, MediaPipePose):
     def synchronous_callback(self):
         """ Synchronous processing callback, enabled/disabled by a service """
         if self.enable_synchronous and self.msg_rgb_img is not None:
-            pose_landmarks, _, _ = self.preprocess_and_predict(self.msg_rgb_img, draw=False, torso_point=False)
+            pose_landmarks, skeleton_img, torso_point = self.preprocess_and_predict(self.msg_rgb_img, draw=self.draw_param, torso_point=False)
             self.pub_poseLandmarks.publish(pose_landmarks)
+            if self.draw_param:
+                self.pub_target_skeletonImg.publish(skeleton_img)
+            if self.torso_param:
+                self.pub_target_point.publish(torso_point)
+            
 
     def preprocess_and_predict(self, img_msg, draw=False, torso_point=False):
         """ Converts the img_msg to cv format, makes a landmark estimation with MediaPipe Pose and returns the results"""
-        cv_img = self.imgmsg_to_cv(img_msg)
-        pose_landmarks, drawn_img = self.predict_landmarks(cv_img, draw=draw)
-                
-        self.msg_pose_landmarks.points = pose_landmarks
+        if img_msg.height > 0 and img_msg.width > 0:
+            cv_img = self.imgmsg_to_cv(img_msg)
+            pose_landmarks_list, drawn_img = self.predict_landmarks(cv_img, draw=draw)
 
-        # Draw landmarks in a skeleton img if requested
-        if draw:
-            self.msg_target_skeleton_img = self.cvBridge.cv2_to_imgmsg(drawn_img)
-        
-        # Calculate the torso point if requested
-        if torso_point:
-            x, y, z = self.calculate_representative_point(pose_landmarks)
-            self.msg_target_point.point = Point(x, y, z)
-            self.msg_target_point.header.stamp = self.get_clock().now().to_msg()
-            self.msg_target_point.header.frame_id = "camera_link"
+            points_array = []
+            if pose_landmarks_list:
+                pose_landmarks = pose_landmarks_list[0]
+                for landmark in pose_landmarks:
+                    point = Point()
+                    point.x = landmark.x
+                    point.y = landmark.y
+                    point.z = landmark.z
+                    points_array.append(point)
 
-            # Set the translations and rotations
-            transform = TransformStamped()
-            transform.header.stamp = self.get_clock().now().to_msg()
-            transform.header.frame_id = "camera_link"
-            transform.child_frame_id = "torso_point"
-            transform.transform.translation.x = x
-            transform.transform.translation.y = y
-            transform.transform.translation.z = z
-            transform.transform.rotation.x = 0.0
-            transform.transform.rotation.y = 0.0
-            transform.transform.rotation.z = 0.0
-            transform.transform.rotation.w = 1.0
-            self.pub_tf.sendTransform(transform)
+            self.msg_pose_landmarks.points = points_array
+
+            # Draw landmarks in a skeleton img if requested
+            if draw:
+                self.msg_target_skeleton_img = self.cvBridge.cv2_to_imgmsg(drawn_img)
+            
+            # Calculate the torso point if requested
+            if torso_point:
+                x, y, z = self.calculate_representative_point(pose_landmarks)
+                self.msg_target_point.point = Point(x, y, z)
+                self.msg_target_point.header.stamp = self.get_clock().now().to_msg()
+                self.msg_target_point.header.frame_id = "camera_link"
+
+                # Set the translations and rotations
+                transform = TransformStamped()
+                transform.header.stamp = self.get_clock().now().to_msg()
+                transform.header.frame_id = "camera_link"
+                transform.child_frame_id = "torso_point"
+                transform.transform.translation.x = x
+                transform.transform.translation.y = y
+                transform.transform.translation.z = z
+                transform.transform.rotation.x = 0.0
+                transform.transform.rotation.y = 0.0
+                transform.transform.rotation.z = 0.0
+                transform.transform.rotation.w = 1.0
+                self.pub_tf.sendTransform(transform)
 
         return self.msg_pose_landmarks, self.msg_target_skeleton_img, self.msg_target_point        
 

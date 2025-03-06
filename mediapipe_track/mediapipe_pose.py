@@ -1,6 +1,14 @@
 import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 import cv2
 import numpy as np
+import ament_index_python.packages
+from mediapipe.framework.formats import landmark_pb2
+import os
+
+package_path = ament_index_python.packages.get_package_share_directory("mediapipe_track")
+package_root = os.path.dirname(package_path)
 
 class MediaPipePose():
     """
@@ -8,6 +16,8 @@ class MediaPipePose():
     and predicts skeleton landmarks of detected persons in the image.
 
     ## Parameters:
+    - `model_path` (string)
+    Path of the selected MediaPipe model. 
     - `num_poses` (int)
     Maximum number of poses to detect. 
     - `detection_conf` (float)
@@ -19,7 +29,8 @@ class MediaPipePose():
     - `segmentation_mask` (bool)
     Whether to include segmentation mask output. 
     """
-    def __init__(self, num_poses=1, detection_conf=0.75, presence_conf=0.5, track_conf=0.9, segmentation_mask=False):
+    def __init__(self, model_path='', num_poses=1, detection_conf=0.75, presence_conf=0.5, track_conf=0.9, segmentation_mask=False):
+        self.set_model_path(model_path=model_path)
         self.num_poses = num_poses
         self.detection_conf = detection_conf
         self.presence_conf = presence_conf
@@ -33,21 +44,35 @@ class MediaPipePose():
             segmentation_mask=self.segmentation_mask
         )
 
-    def load_model(self, num_poses=1, detection_conf=0.75, presence_conf=0.5, track_conf=0.9, segmentation_mask=False):
+    def set_model_path(self, model_path=''):
+        if model_path == '':
+            self.model_path=package_path + "/models/pose_landmarker_lite.task"
+        else:
+            self.model_path=model_path
+
+    def load_model(self, model_path='', num_poses=1, detection_conf=0.75, presence_conf=0.5, track_conf=0.9, segmentation_mask=False):
         """ Loads the MediaPipe Pose model with the selected parameters"""
+        # Initialize MediaPipe Pose components
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.mp_pose = mp.solutions.pose
 
-        # Initialize pose model
-        self.pose = self.mp_pose.Pose(
-            running_mode="IMAGE",
-            num_poses=num_poses,
-            min_detection_confidence=detection_conf,
+        # Initialize BaseOptions with the model path
+        self.set_model_path(model_path=model_path)
+        base_options = python.BaseOptions(model_asset_path=self.model_path)
+
+        # Set up PoseLandmarkerOptions with custom options
+        options = vision.PoseLandmarkerOptions(
+            base_options=base_options,
+            num_poses=num_poses,  # Custom number of poses to detect
+            min_pose_detection_confidence=detection_conf,  # Confidence threshold for detection
             min_pose_presence_confidence=presence_conf,
-            min_tracking_confidence=track_conf,
-            output_segmentation_masks=segmentation_mask
+            min_tracking_confidence=track_conf,  # Confidence threshold for tracking
+            output_segmentation_masks=segmentation_mask  # Option to output segmentation masks
         )
+
+        # Initialize Pose model
+        self.pose = vision.PoseLandmarker.create_from_options(options)
 
     def unload_model(self):
         """ Unloads the model and stops memory usage """
@@ -59,6 +84,7 @@ class MediaPipePose():
         """ Performs landmark estimation in the image and draws them if requested """
         # Check if the image is in cv format
         if not isinstance(cv_image, (np.ndarray, np.generic)):
+            print(type(cv_image))
             raise ValueError("Input image must be a valid OpenCV image (numpy array).")
 
         # Verify if the model is loaded
@@ -67,7 +93,8 @@ class MediaPipePose():
             raise RuntimeWarning("The pose model is not loaded. Loading now, in runtime.")
 
         # Process the results
-        pose_results = self.pose.process(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv_image)
+        pose_results = self.pose.detect(mp_image)
 
         if draw:
             # To draw the hand annotations on the image
@@ -76,17 +103,24 @@ class MediaPipePose():
             # Back to BGR
             cv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2BGR)
 
-            # Draws the skeleton image
-            self.mp_drawing.draw_landmarks(
-            cv_image,
-            pose_results.pose_landmarks,
-            self.mp_pose.POSE_CONNECTIONS,
-            landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style())
-        else:
-            # Make cv_image an empty image
-            cv_image = np.zeros_like(cv_image)
+            pose_landmarks_list = pose_results.pose_landmarks
+
+            # Loop through the detected poses to visualize.
+            for idx in range(len(pose_landmarks_list)):
+                pose_landmarks = pose_landmarks_list[idx]
+
+                # Draw the pose landmarks.
+                pose_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
+                pose_landmarks_proto.landmark.extend([
+                landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z) for landmark in pose_landmarks
+                ])
+                self.mp_drawing.draw_landmarks(
+                cv_image,
+                pose_landmarks_proto,
+                self.mp_pose.POSE_CONNECTIONS,
+                self.mp_drawing_styles.get_default_pose_landmarks_style())
         
-        return pose_results.pose_landmarks, cv_image
+        return pose_results.pose_world_landmarks, cv_image
         
     def calculate_representative_point(self, landmarks):
         """ Calculates the midpoint of the torso, with the shoulder and hips landmarks """
