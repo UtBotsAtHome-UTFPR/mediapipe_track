@@ -1,24 +1,26 @@
 # mediapipe_track
-- ROS package that applies [MediaPipe Pose solution](https://google.github.io/mediapipe/solutions/pose) 
-- Tested Kinect V1 RGB and Depth images 
-- Important addition to MediaPipe Pose: ability to calculate and detect the person's 3D position and publish this information in ROS Topics so the robot can know its relative position from the person detected.
-- Support for use of person bounding box image
+- ROS2 package that applies [MediaPipe Pose solution](https://google.github.io/mediapipe/solutions/pose) 
+- Important addition to MediaPipe Pose: ability to calculate and detect the person's 3D position and publish this information in ROS Topics so the robot can know its relative position from the person detected
+- Synchronous processing in real-time frames can be enabled/disabled by a service
+- Assynchronous processing responds to Action requests
+- Tested in Ubuntu 22 with ROS Humble
 
 ## Installation
 
 ### Building
 
 ```bash
-cd catkin_ws/src
+cd <ros2_ws>/src
 git clone https://github.com/UtBotsAtHome-UTFPR/mediapipe_track.git
+git checkout ros2-dev
 cd ..
-catkin_make
+colcon build --symlink-install
 ```
 
 ### Dependencies
-This package depends on [freenect_launch](https://github.com/ros-drivers/freenect_stack) and runs on python, with mediapipe library.
+This package 
 
-The code runs on Python 3.8 and depends on mediapipe. Install the requirements:
+The code runs on Python 3.9 and depends on mediapipe 0.10.21 for the latest features. Install the requirements:
 
 ```bash
 roscd mediapipe_track/src
@@ -28,27 +30,58 @@ pip3 install -r requirements.txt
 **OBS**: because of permission problems with the model access in the library, mediapipe's libraries will not be located in a virtualenv yet
 
 ## Running
-
-First, run freenect:
+To run the Mediapipe pose estimation node:
 
 ```bash
-roslaunch mediapipe_track freenect.launch
+ros2 run mediapipe_track mediapipe_node
 ```
 
-Then, to run the Mediapipe pose estimation and 3d points positions:
+Or using launchfiles:
 
 ```bash
-roslaunch mediapipe_track body_pose_and_points.launch
+ros2 launch mediapipe_track mediapipe_node.launch.py
 ```
 
-To run only the Mediapipe pose estimation:
+With launchfiles you can specify the parameter values using any of the arguments in Command Line or other launchfiles (for instance, disabling *draw_skeleton_img* or *calculate_torso_point* could save processing usage):
 
 ```bash
-rosrun mediapipe_track body_pose.py
-```
+'topic_namespace':
+    Namespace for topics
+    (default: '/utbots/vision')
 
-To view the 3D map with the published 3D point referred as the person detected position, run Rviz with:
+'model_path':
+    Path to the model file
+    (default: '')
 
-```bash
-roslaunch mediapipe_track rviz.launch
+'num_poses':
+    Maximum number of poses to detect
+    (default: '1')
+
+'detection_conf':
+    Detection confidence threshold
+    (default: '0.75')
+
+'presence_conf':
+    Presence confidence threshold
+    (default: '0.5')
+
+'track_conf':
+    Tracking confidence threshold
+    (default: '0.9')
+
+'draw_skeleton_img':
+    Draw skeleton image
+    (default: 'true')
+
+'calculate_torso_point':
+    Calculate torso point
+    (default: 'true')
+
+'segmentation_mask':
+    Use segmentation mask
+    (default: 'false')
+
+'rgb_topic':
+    RGB input topic
+    (default: '/camera/rgb/image_color')
 ```

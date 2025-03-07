@@ -45,6 +45,7 @@ class MediaPipePose():
         )
 
     def set_model_path(self, model_path=''):
+        """ Sets the model path for the MediaPipe Pose model """
         if model_path == '':
             self.model_path=package_path + "/models/pose_landmarker_lite.task"
         else:
