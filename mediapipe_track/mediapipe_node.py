@@ -169,11 +169,11 @@ class MediaPipeNode(Node, MediaPipePose):
             self.pub_poseLandmarks.publish(pose_landmarks)
             
             # Only considers TorsoPoint and Drawn if requested by Goal
-            if goal.GetTorsoPoint:
+            if goal.get_torso_point:
                 action_res.point = target_point
                 self.pub_target_point.publish(target_point)
 
-            if goal.GetDrawn:
+            if goal.get_drawn:
                 self.pub_target_skeletonImg.publish(skeleton_img)
                 action_res.skeleton_img = skeleton_img
             
