@@ -1,8 +1,6 @@
 #!/usr/bin/python3
 
-import mediapipe as mp
 from .mediapipe_pose import MediaPipePose
-import numpy as np
 import cv2
 import os
 from cv_bridge import CvBridge
@@ -13,7 +11,7 @@ from utbots_actions.action import MPPose
 from sensor_msgs.msg import Image
 from utbots_msgs.msg import Skeleton2d
 from geometry_msgs.msg import PointStamped, Point, TransformStamped
-from std_msgs.msg import String, Bool
+from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
 from tf2_ros import TransformBroadcaster
 import ament_index_python.packages
