@@ -7,27 +7,29 @@
 
 ## Installation
 
-### Building
-
 ```bash
 cd <ros2_ws>/src
 git clone https://github.com/UtBotsAtHome-UTFPR/mediapipe_track.git
-git checkout ros2-dev
-cd ..
+```
+
+### Dependencies and Build
+The code runs on Python 3.9 and depends on mediapipe 0.10.21 for the latest features.
+
+If you haven't installed `virtualenv`:
+```bash
+pip3 install virtualenv
+```
+
+In the package directory:
+```bash
+python -m virtualenv .venv
+source .venv/bin/activate
+pip3 install -r requirements.txt
+cd ../..
 colcon build --symlink-install
 ```
 
-### Dependencies
-This package 
-
-The code runs on Python 3.9 and depends on mediapipe 0.10.21 for the latest features. Install the requirements:
-
-```bash
-roscd mediapipe_track/src
-pip3 install -r requirements.txt
-```
-
-**OBS**: because of permission problems with the model access in the library, mediapipe's libraries will not be located in a virtualenv yet
+Change the username and workspace name if needed in `setup.cfg`. *Not the ideal solution, but the current one while we don't use Docker*.
 
 ## Running
 To run the Mediapipe pose estimation node:

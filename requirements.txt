@@ -1,3 +1,4 @@
 opencv-python
 mediapipe==0.10.21
+tensorflow
 rospkg
