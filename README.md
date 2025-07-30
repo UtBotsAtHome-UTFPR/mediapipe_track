@@ -7,29 +7,36 @@
 
 ## Installation
 
+### Building
+
 ```bash
 cd <ros2_ws>/src
 git clone https://github.com/UtBotsAtHome-UTFPR/mediapipe_track.git
+cd ..
+colcon build --packages-select mediapipe_track utbots_actions utbots_srvs utbots_msgs \
+--allow-overriding utbots_msgs utbots_actions utbots_srvs \
+&& source install/setup.bash
 ```
 
-### Dependencies and Build
-The code runs on Python 3.9 and depends on mediapipe 0.10.21 for the latest features.
+### Dependencies
+To avoid conflicts between package dependencies, we use virtual environments. Change the virtuelenv path in the `executable` field in `setup.cfg`. *Not the ideal solution, but the current one while we don't use Docker*.
 
 If you haven't installed `virtualenv`:
 ```bash
 pip3 install virtualenv
 ```
 
-In the package directory:
+Create and activate env:
 ```bash
-python -m virtualenv .venv
-source .venv/bin/activate
-pip3 install -r requirements.txt
-cd ../..
-colcon build --symlink-install
+python -m virtualenv <env_path>
+source <env_path>/bin/activate
 ```
 
-Change the username and workspace name if needed in `setup.cfg`. *Not the ideal solution, but the current one while we don't use Docker*.
+The code runs on Python 3.9 and depends on mediapipe 0.10.21 for the latest features. Install the requirements:
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Running
 To run the Mediapipe pose estimation node:
