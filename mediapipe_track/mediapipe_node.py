@@ -153,8 +153,8 @@ class MediaPipeNode(Node, MediaPipePose):
         self.get_logger().info("[MPPOSE] Goal received")
 
         # Optional specific image sent as goal
-        if goal.Image.width != 0 and goal.Image.height != 0:
-            img_msg = goal.Image
+        if goal.image.width != 0 and goal.image.height != 0:
+            img_msg = goal.image
         else:
             img_msg = self.msg_rgb_img
 
